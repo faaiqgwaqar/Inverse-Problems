@@ -5,41 +5,114 @@ using Markdown
 using InteractiveUtils
 
 # ╔═╡ a9ad09a2-81f6-11ec-2768-87de554ed581
-using CairoMakie, Optim
+using CairoMakie, Optim, CSV, DataFrames
+
+# ╔═╡ c2f4d731-8ba6-4f2c-9006-2f8adc9235dc
+update_theme!(fontsize=20, linewidth=4)
+
+# ╔═╡ 885bbf36-7632-4527-bfe7-04976e839d4e
+data = CSV.read(joinpath("..", "Arduino Results", "Hot Tea Test 1.csv"), DataFrame)
+
+# ╔═╡ c29b70e0-07a6-4cb1-9999-69b1f95bcc2a
+Δt = 10.0 # s
+
+# ╔═╡ 5daae49f-d519-4d70-9241-8aedbe09baa5
+data[:, "time[s]"] = [Δt * (i - 1) for i = 1:nrow(data)]
+
+# ╔═╡ 8bdedac3-5672-428a-ae83-2ffbab210c60
+filter!(row -> row["time[s]"] > 40.0, data)
+
+# ╔═╡ bc6fd660-1972-4a69-b180-c01e21cec5e0
+data[:, "time[s]"] = data[:, "time[s]"] .- data[1, "time[s]"]
+
+# ╔═╡ 67933d9c-d861-4326-a714-9d461e7a64ac
+data[:, "time[min]"] = data[:, "time[s]"] / 60.0
+
+# ╔═╡ 81b6da6c-ad06-4dbf-ae00-dc734b679e45
+data
+
+# ╔═╡ 6ad47dbb-6513-4f18-9f44-cc82b26555b5
+Tₐ = 21.1 # °C (TODO: get from sensor)
+
+# ╔═╡ 85bf5d1c-819f-4dd6-9201-de5ce94f48b5
+begin
+	fig = Figure()
+	ax  = Axis(fig[1, 1], xlabel="time, t [min]", ylabel="temperature, T(t) [°C]")
+	scatter!(data[:, "time[min]"], data[:, "T[deg C]"])
+	hlines!(ax, Tₐ, style=:dash, color=:gray)
+	fig
+end
+
+# ╔═╡ dd37ff0f-fc4f-4076-9da5-f7735ac3d829
+T₀ = data[1, "T[deg C]"]
 
 # ╔═╡ 4418399f-1356-4e5b-82a1-b4c608e5c285
 md"for insipration see [here](https://github.com/SimonEnsemble/control_theory_demos/blob/master/studios/fitting%20empirical%20models.ipynb)"
 
 # ╔═╡ 67d76287-592c-498a-8f14-a0589dae84c5
-function T_model(t, τ) 
+function T_model(t, τ)
     if t < 0.0
-        return T_Grant
-    else
-        return T_Grant .+ M * (1.0 - exp(-t / τ))
-    end
+        error("invalid for t < 0")
+	end
+    return Tₐ .+ (T₀ - Tₐ) * exp(-t / τ)
 end
 
 # ╔═╡ 51f47395-da6c-484e-a313-0da2b2b916d9
-
-
 function cost(τ)
     ℓ = 0.0
-    for i = 1:length(t)
-        ℓ += (T[i] - T_model(t[i], τ)) ^ 2
+    for row in eachrow(data)
+		tᵢ = row["time[min]"]
+		Tᵢ = row["T[deg C]"]
+		
+        ℓ += (Tᵢ - T_model(tᵢ, τ)) ^ 2
     end
     return ℓ
 end
 
+# ╔═╡ ea783d58-f6ea-49ba-8c19-df301b9a4294
+opt_res = optimize(cost, 0.0, 200.0)
 
+# ╔═╡ cb17b065-6f1b-45ca-b529-eaf61aef9404
+τ_opt = opt_res.minimizer
+
+# ╔═╡ 591cfced-dd71-4cd4-85cc-0fdf5bb2594e
+begin
+	τs = range(0.0, 200.0, length=100)
+	
+	local fig = Figure()
+	local ax  = Axis(fig[1, 1], 
+		             xlabel="time constant, τ [min]", 
+		             ylabel="cost [(°C)²]")
+	lines!(τs, cost.(τs))
+	vlines!(ax, τ_opt, style=:dash, color=:gray)
+	fig
+end
+
+# ╔═╡ bc90f7e1-95b0-455c-bba6-846403d6cbb3
+begin
+	t = range(0.0, 250.0, length=200)
+	
+	local fig = Figure()
+	local ax  = Axis(fig[1, 1], xlabel="time, t [min]", ylabel="temperature, T(t) [°C]")
+	scatter!(data[:, "time[min]"], data[:, "T[deg C]"], label="data")
+	lines!(t, T_model.(t, τ_opt), label="model", color="red")
+	hlines!(ax, Tₐ, style=:dash, color=:gray)
+	axislegend()
+	fig
+end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
+CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 Optim = "429524aa-4258-5aef-a3af-852621145aeb"
 
 [compat]
+CSV = "~0.10.2"
 CairoMakie = "~0.7.2"
+DataFrames = "~1.3.2"
 Optim = "~1.6.0"
 """
 
@@ -49,7 +122,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.0-DEV.1390"
 manifest_format = "2.0"
-project_hash = "bc78ab969fc5fe2cadc357b4d833f5f5c3f2cf5e"
+project_hash = "5c63784c1dabfa77f76a8db5fde1bcef1086c8dc"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra"]
@@ -113,6 +186,12 @@ git-tree-sha1 = "215a9aa4a1f23fbd05b92769fdd62559488d70e9"
 uuid = "fa961155-64e5-5f13-b03f-caf6b980ea82"
 version = "0.4.1"
 
+[[deps.CSV]]
+deps = ["CodecZlib", "Dates", "FilePathsBase", "InlineStrings", "Mmap", "Parsers", "PooledArrays", "SentinelArrays", "Tables", "Unicode", "WeakRefStrings"]
+git-tree-sha1 = "9519274b50500b8029973d241d32cfbf0b127d97"
+uuid = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
+version = "0.10.2"
+
 [[deps.Cairo]]
 deps = ["Cairo_jll", "Colors", "Glib_jll", "Graphics", "Libdl", "Pango_jll"]
 git-tree-sha1 = "d0b3f8b4ad16cb0a2988c6788646a5e6a17b6b1b"
@@ -142,6 +221,12 @@ deps = ["ChainRulesCore", "LinearAlgebra", "Test"]
 git-tree-sha1 = "bf98fa45a0a4cee295de98d4c1462be26345b9a1"
 uuid = "9e997f8a-9a97-42d5-a9f1-ce6bfc15e2c0"
 version = "0.1.2"
+
+[[deps.CodecZlib]]
+deps = ["TranscodingStreams", "Zlib_jll"]
+git-tree-sha1 = "ded953804d019afa9a3f98981d99b33e3db7b6da"
+uuid = "944b1d66-785c-5afd-91f1-9de20f533193"
+version = "0.7.0"
 
 [[deps.ColorBrewer]]
 deps = ["Colors", "JSON", "Test"]
@@ -196,10 +281,21 @@ git-tree-sha1 = "9f02045d934dc030edad45944ea80dbd1f0ebea7"
 uuid = "d38c429a-6771-53c6-b99e-75d170b6e991"
 version = "0.5.7"
 
+[[deps.Crayons]]
+git-tree-sha1 = "249fe38abf76d48563e2f4556bebd215aa317e15"
+uuid = "a8cc5b0e-0ffa-5ad4-8c14-923d3ee1735f"
+version = "4.1.1"
+
 [[deps.DataAPI]]
 git-tree-sha1 = "cc70b17275652eb47bc9e5f81635981f13cea5c8"
 uuid = "9a962f9c-6df0-11e9-0e5d-c546b8b5ee8a"
 version = "1.9.0"
+
+[[deps.DataFrames]]
+deps = ["Compat", "DataAPI", "Future", "InvertedIndices", "IteratorInterfaceExtensions", "LinearAlgebra", "Markdown", "Missings", "PooledArrays", "PrettyTables", "Printf", "REPL", "Reexport", "SortingAlgorithms", "Statistics", "TableTraits", "Tables", "Unicode"]
+git-tree-sha1 = "ae02104e835f219b8930c7664b8012c93475c340"
+uuid = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+version = "1.3.2"
 
 [[deps.DataStructures]]
 deps = ["Compat", "InteractiveUtils", "OrderedCollections"]
@@ -307,6 +403,12 @@ git-tree-sha1 = "67551df041955cc6ee2ed098718c8fcd7fc7aebe"
 uuid = "5789e2e9-d7fb-5bc7-8068-2c6fae9b9549"
 version = "1.12.0"
 
+[[deps.FilePathsBase]]
+deps = ["Compat", "Dates", "Mmap", "Printf", "Test", "UUIDs"]
+git-tree-sha1 = "04d13bfa8ef11720c24e4d840c0033d145537df7"
+uuid = "48062228-2e41-5def-b9a4-89aafe57970f"
+version = "0.9.17"
+
 [[deps.FileWatching]]
 uuid = "7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"
 
@@ -369,6 +471,10 @@ deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "aa31987c2ba8704e23c6c8ba8a4f769d5d7e4f91"
 uuid = "559328eb-81f9-559d-9380-de523a88c83c"
 version = "1.0.10+0"
+
+[[deps.Future]]
+deps = ["Random"]
+uuid = "9fa8497b-333b-5362-9e8d-4d0656e87820"
 
 [[deps.GeometryBasics]]
 deps = ["EarCut_jll", "IterTools", "LinearAlgebra", "StaticArrays", "StructArrays", "Tables"]
@@ -450,6 +556,12 @@ git-tree-sha1 = "f5fc07d4e706b84f72d54eedcc1c13d92fb0871c"
 uuid = "d25df0c9-e2be-5dd7-82c8-3ad0b3e990b9"
 version = "0.1.2"
 
+[[deps.InlineStrings]]
+deps = ["Parsers"]
+git-tree-sha1 = "61feba885fac3a407465726d0c330b3055df897f"
+uuid = "842dd82b-1e85-43dc-bf29-5d0ee9dffc48"
+version = "1.1.2"
+
 [[deps.IntelOpenMP_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "d979e54b71da82f3a65b62553da4fc3d18c9004c"
@@ -477,6 +589,11 @@ deps = ["Test"]
 git-tree-sha1 = "a7254c0acd8e62f1ac75ad24d5db43f5f19f3c65"
 uuid = "3587e190-3f89-42d0-90ee-14403ec27112"
 version = "0.1.2"
+
+[[deps.InvertedIndices]]
+git-tree-sha1 = "bee5f1ef5bf65df56bdd2e40447590b272a5471f"
+uuid = "41ab1584-1d38-5bbf-9106-f11c6c58b48f"
+version = "1.1.0"
 
 [[deps.IrrationalConstants]]
 git-tree-sha1 = "7fd44fd4ff43fc60815f8e764c0f352b83c49151"
@@ -848,6 +965,12 @@ git-tree-sha1 = "77b3d3605fc1cd0b42d95eba87dfcd2bf67d5ff6"
 uuid = "647866c9-e3ac-4575-94e7-e3d426903924"
 version = "0.1.2"
 
+[[deps.PooledArrays]]
+deps = ["DataAPI", "Future"]
+git-tree-sha1 = "db3a23166af8aebf4db5ef87ac5b00d36eb771e2"
+uuid = "2dfb63ee-cc39-5dd5-95bd-886bf059d720"
+version = "1.4.0"
+
 [[deps.PositiveFactorizations]]
 deps = ["LinearAlgebra"]
 git-tree-sha1 = "17275485f373e6673f7e7f97051f703ed5b15b20"
@@ -859,6 +982,12 @@ deps = ["TOML"]
 git-tree-sha1 = "2cf929d64681236a2e074ffafb8d568733d2e6af"
 uuid = "21216c6a-2e73-6563-6e65-726566657250"
 version = "1.2.3"
+
+[[deps.PrettyTables]]
+deps = ["Crayons", "Formatting", "Markdown", "Reexport", "Tables"]
+git-tree-sha1 = "dfb54c4e414caa595a1f2ed759b160f5a3ddcba5"
+uuid = "08abe8d2-0d0c-5749-adfa-8a2ac140af0d"
+version = "1.3.1"
 
 [[deps.Printf]]
 deps = ["Unicode"]
@@ -945,6 +1074,12 @@ deps = ["Dates"]
 git-tree-sha1 = "0b4b7f1393cff97c33891da2a0bf69c6ed241fda"
 uuid = "6c6a2e73-6563-6170-7368-637461726353"
 version = "1.1.0"
+
+[[deps.SentinelArrays]]
+deps = ["Dates", "Random"]
+git-tree-sha1 = "15dfe6b103c2a993be24404124b8791a09460983"
+uuid = "91c51154-3ec4-41a3-a24f-3f23e20d615c"
+version = "1.3.11"
 
 [[deps.Serialization]]
 uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
@@ -1101,6 +1236,12 @@ git-tree-sha1 = "53915e50200959667e78a92a418594b428dffddf"
 uuid = "1cfade01-22cf-5700-b092-accc4b62d6e1"
 version = "0.4.1"
 
+[[deps.WeakRefStrings]]
+deps = ["DataAPI", "InlineStrings", "Parsers"]
+git-tree-sha1 = "c69f9da3ff2f4f02e811c3323c22e5dfcb584cfa"
+uuid = "ea10d353-3f73-51f8-a26c-33c1cb351aa5"
+version = "1.4.1"
+
 [[deps.WoodburyMatrices]]
 deps = ["LinearAlgebra", "SparseArrays"]
 git-tree-sha1 = "de67fa59e33ad156a590055375a30b23c40299d3"
@@ -1238,8 +1379,23 @@ version = "3.5.0+0"
 
 # ╔═╡ Cell order:
 # ╠═a9ad09a2-81f6-11ec-2768-87de554ed581
+# ╠═c2f4d731-8ba6-4f2c-9006-2f8adc9235dc
+# ╠═885bbf36-7632-4527-bfe7-04976e839d4e
+# ╠═c29b70e0-07a6-4cb1-9999-69b1f95bcc2a
+# ╠═5daae49f-d519-4d70-9241-8aedbe09baa5
+# ╠═8bdedac3-5672-428a-ae83-2ffbab210c60
+# ╠═bc6fd660-1972-4a69-b180-c01e21cec5e0
+# ╠═67933d9c-d861-4326-a714-9d461e7a64ac
+# ╠═81b6da6c-ad06-4dbf-ae00-dc734b679e45
+# ╠═6ad47dbb-6513-4f18-9f44-cc82b26555b5
+# ╠═85bf5d1c-819f-4dd6-9201-de5ce94f48b5
+# ╠═dd37ff0f-fc4f-4076-9da5-f7735ac3d829
 # ╟─4418399f-1356-4e5b-82a1-b4c608e5c285
 # ╠═67d76287-592c-498a-8f14-a0589dae84c5
 # ╠═51f47395-da6c-484e-a313-0da2b2b916d9
+# ╠═ea783d58-f6ea-49ba-8c19-df301b9a4294
+# ╠═cb17b065-6f1b-45ca-b529-eaf61aef9404
+# ╠═591cfced-dd71-4cd4-85cc-0fdf5bb2594e
+# ╠═bc90f7e1-95b0-455c-bba6-846403d6cbb3
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
