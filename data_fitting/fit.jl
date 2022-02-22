@@ -1,50 +1,57 @@
 ### A Pluto.jl notebook ###
-# v0.17.7
+# v0.18.0
 
 using Markdown
 using InteractiveUtils
 
 # ╔═╡ a9ad09a2-81f6-11ec-2768-87de554ed581
-using CairoMakie, Optim, CSV, DataFrames
+using CairoMakie, Optim, CSV, DataFrames, StatsBase
 
 # ╔═╡ c2f4d731-8ba6-4f2c-9006-2f8adc9235dc
 update_theme!(fontsize=20, linewidth=4)
 
-# ╔═╡ 885bbf36-7632-4527-bfe7-04976e839d4e
-data = CSV.read(joinpath("..", "Arduino Results", "Hot Tea Test 1.csv"), DataFrame)
-
 # ╔═╡ c29b70e0-07a6-4cb1-9999-69b1f95bcc2a
-Δt = 10.0 # s
+begin
+	data = CSV.read(joinpath("..", "Arduino Results", "orange.csv"), DataFrame)
+	
+	Δt = 10.0 # s
+	data[:, "time [s]"] = [Δt * (i - 1) for i = 1:nrow(data)]
+	data[:, "time [min]"] = data[:, "time [s]"] / 60.0
+	data = data[:, ["time [min]", "Temp [C]"]]
+end
 
-# ╔═╡ 5daae49f-d519-4d70-9241-8aedbe09baa5
-data[:, "time[s]"] = [Δt * (i - 1) for i = 1:nrow(data)]
-
-# ╔═╡ 8bdedac3-5672-428a-ae83-2ffbab210c60
-filter!(row -> row["time[s]"] > 40.0, data)
-
-# ╔═╡ bc6fd660-1972-4a69-b180-c01e21cec5e0
-data[:, "time[s]"] = data[:, "time[s]"] .- data[1, "time[s]"]
-
-# ╔═╡ 67933d9c-d861-4326-a714-9d461e7a64ac
-data[:, "time[min]"] = data[:, "time[s]"] / 60.0
-
-# ╔═╡ 81b6da6c-ad06-4dbf-ae00-dc734b679e45
-data
+# ╔═╡ 3977f8c5-6af3-4343-8659-4d4ee28e1ed7
+md"assume air temperature is given as average temperature recorded over last 50 s"
 
 # ╔═╡ 6ad47dbb-6513-4f18-9f44-cc82b26555b5
-Tₐ = 21.1 # °C (TODO: get from sensor)
+Tₐ = mean(data[end-5:end, "Temp [C]"]) +0.1 # °C (TODO: get from sensor)
 
-# ╔═╡ 85bf5d1c-819f-4dd6-9201-de5ce94f48b5
-begin
+# ╔═╡ f68fcc2b-7f79-4896-83a7-f0141e8bf02d
+function viz_data(data::DataFrame, Tₐ::Float64)
 	fig = Figure()
 	ax  = Axis(fig[1, 1], xlabel="time, t [min]", ylabel="temperature, T(t) [°C]")
-	scatter!(data[:, "time[min]"], data[:, "T[deg C]"])
+	scatter!(data[:, "time [min]"], data[:, "Temp [C]"])
 	hlines!(ax, Tₐ, style=:dash, color=:gray)
 	fig
 end
 
+# ╔═╡ 9c6d23d9-fcc2-4704-86c5-50a13d6af2e0
+viz_data(data, Tₐ)
+
+# ╔═╡ 927f48f6-7731-4d1b-bdf4-37d7c5c78b7c
+t_new_start = 2.0
+
+# ╔═╡ 8bdedac3-5672-428a-ae83-2ffbab210c60
+filter!(row -> row["time [min]"] > t_new_start, data)
+
+# ╔═╡ 99bc8668-a2d3-47f5-9f22-cb178a415d9f
+data[:, "time [min]"] = data[:, "time [min]"] .- t_new_start
+
+# ╔═╡ d9ca96e3-263c-4c50-995b-d6c1abb8f4c1
+viz_data(data, Tₐ)
+
 # ╔═╡ dd37ff0f-fc4f-4076-9da5-f7735ac3d829
-T₀ = data[1, "T[deg C]"]
+T₀ = data[1, "Temp [C]"]
 
 # ╔═╡ 4418399f-1356-4e5b-82a1-b4c608e5c285
 md"for insipration see [here](https://github.com/SimonEnsemble/control_theory_demos/blob/master/studios/fitting%20empirical%20models.ipynb)"
@@ -61,8 +68,8 @@ end
 function cost(τ)
     ℓ = 0.0
     for row in eachrow(data)
-		tᵢ = row["time[min]"]
-		Tᵢ = row["T[deg C]"]
+		tᵢ = row["time [min]"]
+		Tᵢ = row["Temp [C]"]
 		
         ℓ += (Tᵢ - T_model(tᵢ, τ)) ^ 2
     end
@@ -94,8 +101,8 @@ begin
 	
 	local fig = Figure()
 	local ax  = Axis(fig[1, 1], xlabel="time, t [min]", ylabel="temperature, T(t) [°C]")
-	scatter!(data[:, "time[min]"], data[:, "T[deg C]"], label="data")
-	lines!(t, T_model.(t, τ_opt), label="model", color="red")
+	scatter!(data[:, "time [min]"], data[:, "Temp [C]"], label="data")
+	lines!(t, T_model.(t, τ_opt), label="model", color="red", linestyle=:dash)
 	hlines!(ax, Tₐ, style=:dash, color=:gray)
 	axislegend()
 	fig
@@ -108,12 +115,14 @@ CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 Optim = "429524aa-4258-5aef-a3af-852621145aeb"
+StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
 [compat]
 CSV = "~0.10.2"
 CairoMakie = "~0.7.2"
 DataFrames = "~1.3.2"
 Optim = "~1.6.0"
+StatsBase = "~0.33.16"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
@@ -122,7 +131,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.0-DEV.1390"
 manifest_format = "2.0"
-project_hash = "5c63784c1dabfa77f76a8db5fde1bcef1086c8dc"
+project_hash = "5263509ca05840831383ffa4517b2c287cbc114f"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra"]
@@ -1154,9 +1163,9 @@ version = "1.2.0"
 
 [[deps.StatsBase]]
 deps = ["DataAPI", "DataStructures", "LinearAlgebra", "LogExpFunctions", "Missings", "Printf", "Random", "SortingAlgorithms", "SparseArrays", "Statistics", "StatsAPI"]
-git-tree-sha1 = "51383f2d367eb3b444c961d485c565e4c0cf4ba0"
+git-tree-sha1 = "8977b17906b0a1cc74ab2e3a05faa16cf08a8291"
 uuid = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
-version = "0.33.14"
+version = "0.33.16"
 
 [[deps.StatsFuns]]
 deps = ["ChainRulesCore", "InverseFunctions", "IrrationalConstants", "LogExpFunctions", "Reexport", "Rmath", "SpecialFunctions"]
@@ -1380,15 +1389,15 @@ version = "3.5.0+0"
 # ╔═╡ Cell order:
 # ╠═a9ad09a2-81f6-11ec-2768-87de554ed581
 # ╠═c2f4d731-8ba6-4f2c-9006-2f8adc9235dc
-# ╠═885bbf36-7632-4527-bfe7-04976e839d4e
 # ╠═c29b70e0-07a6-4cb1-9999-69b1f95bcc2a
-# ╠═5daae49f-d519-4d70-9241-8aedbe09baa5
-# ╠═8bdedac3-5672-428a-ae83-2ffbab210c60
-# ╠═bc6fd660-1972-4a69-b180-c01e21cec5e0
-# ╠═67933d9c-d861-4326-a714-9d461e7a64ac
-# ╠═81b6da6c-ad06-4dbf-ae00-dc734b679e45
+# ╟─3977f8c5-6af3-4343-8659-4d4ee28e1ed7
 # ╠═6ad47dbb-6513-4f18-9f44-cc82b26555b5
-# ╠═85bf5d1c-819f-4dd6-9201-de5ce94f48b5
+# ╠═f68fcc2b-7f79-4896-83a7-f0141e8bf02d
+# ╠═9c6d23d9-fcc2-4704-86c5-50a13d6af2e0
+# ╠═927f48f6-7731-4d1b-bdf4-37d7c5c78b7c
+# ╠═8bdedac3-5672-428a-ae83-2ffbab210c60
+# ╠═99bc8668-a2d3-47f5-9f22-cb178a415d9f
+# ╠═d9ca96e3-263c-4c50-995b-d6c1abb8f4c1
 # ╠═dd37ff0f-fc4f-4076-9da5-f7735ac3d829
 # ╟─4418399f-1356-4e5b-82a1-b4c608e5c285
 # ╠═67d76287-592c-498a-8f14-a0589dae84c5
