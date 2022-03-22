@@ -10,12 +10,20 @@ Adafruit_MAX31865 thermo = Adafruit_MAX31865(10, 11, 12, 13);
 // The 'nominal' 0-degrees-C resistance of the sensor
 #define RNOMINAL  1000.0
 
+unsigned long CurrentTime;
+unsigned long StartTime;
+bool start_clock;
+
 void setup() {
   // Define the baud rate(UART)
   Serial.begin(115200);
 
   // Initialize 3 wire interfacing RTD sensor
   thermo.begin(MAX31865_3WIRE);
+
+  start_clock = true;
+
+  Serial.println("Time [ms] \t Temp [C]");
 }
 
 
@@ -27,8 +35,19 @@ void loop() {
   ratio /= 32768;
   /* Serial.print("Ratio = "); Serial.println(ratio,8);
   Serial.print("Resistance = "); Serial.println(RREF*ratio,8);
-  Serial.print("Temperature = ");*/ 
-  Serial.println(thermo.temperature(RNOMINAL, RREF));
+  Serial.print("Temperature = ");*/
+  if(start_clock) 
+  {
+    StartTime = millis();
+    CurrentTime = StartTime;
+    start_clock = false;
+  }
+  else CurrentTime = millis();
+
+  Serial.print(CurrentTime - StartTime);
+  Serial.print("\t");
+  Serial.print(thermo.temperature(RNOMINAL, RREF));
+  Serial.print("\n");
 
   // Check and print any faults
   uint8_t fault = thermo.readFault();
