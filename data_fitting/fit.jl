@@ -12,7 +12,7 @@ update_theme!(fontsize=20, linewidth=4)
 
 # ╔═╡ c29b70e0-07a6-4cb1-9999-69b1f95bcc2a
 begin
-	data = CSV.read(joinpath("..", "Arduino Results", "orange2_fruit.csv"), DataFrame)
+	data = CSV.read(joinpath("..", "Arduino Results", "orange4_fruit.csv"), DataFrame)
 	
 	# Δt = 10.0 # s
 	# data[:, "time [s]"] = [Δt * (i - 1) for i = 1:nrow(data)]
@@ -28,8 +28,10 @@ md"assume air temperature is given as average temperature recorded over last 50 
 # ╔═╡ 6ad47dbb-6513-4f18-9f44-cc82b26555b5
 #Tₐ = mean(data[end-5:end, "Temp [C]"]) +0.1 # °C (TODO: get from sensor)
 begin
-	Tₐ = CSV.read(joinpath("..", "Arduino Results", "orange2_room.csv"), DataFrame)
-	Tₐ = mean(Tₐ[:,"Temp [C]"])	
+	Tₐ = CSV.read(joinpath("..", "Arduino Results", "orange4_room.csv"), DataFrame)
+	Tₐ_new_end = 500000.0
+	filter!(row -> row["Time [ms]"] < Tₐ_new_end, Tₐ)
+	Tₐ = mean(Tₐ[:,"Temp [C]"])
 end
 
 # ╔═╡ f68fcc2b-7f79-4896-83a7-f0141e8bf02d
