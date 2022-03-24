@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.17.7
+# v0.17.2
 
 using Markdown
 using InteractiveUtils
@@ -12,10 +12,10 @@ update_theme!(fontsize=20, linewidth=4)
 
 # ╔═╡ c29b70e0-07a6-4cb1-9999-69b1f95bcc2a
 begin
-	data = CSV.read(joinpath("..", "Arduino Results", "orange4_fruit.csv"), DataFrame)
+	filename = "orange4_fruit.csv"
 	
-	# Δt = 10.0 # s
-	# data[:, "time [s]"] = [Δt * (i - 1) for i = 1:nrow(data)]
+	data = CSV.read(joinpath("..", "Arduino Results", filename), DataFrame)
+	
 	data[:, "Time [s]"] = data[:, "Time [ms]"] / 1000.0
 	data[:, "Time [min]"] = data[:, "Time [s]"] / 60.0
 	data = data[:, ["Time [min]", "Temp [C]"]]
@@ -28,10 +28,17 @@ md"assume air temperature is given as average temperature recorded over last 50 
 # ╔═╡ 6ad47dbb-6513-4f18-9f44-cc82b26555b5
 #Tₐ = mean(data[end-5:end, "Temp [C]"]) +0.1 # °C (TODO: get from sensor)
 begin
-	Tₐ = CSV.read(joinpath("..", "Arduino Results", "orange4_room.csv"), DataFrame)
-	Tₐ_new_end = 500000.0
-	filter!(row -> row["Time [ms]"] < Tₐ_new_end, Tₐ)
-	Tₐ = mean(Tₐ[:,"Temp [C]"])
+	estimate_Tₐ_from_end = true
+	if estimate_Tₐ_from_end
+		Tₐ = mean(data[end-10:end, "Temp [C]"])
+	else
+		rt_data = CSV.read(joinpath("..", "Arduino Results", "orange$(expt_no)_room.csv"), DataFrame)
+		rt_data[:, "Time [min]"] = rt_data[:, "Time [ms]"] / 1000.0 / 60.0
+		t_end = 3.0 # min
+		filter!(row -> row["Time [min]"] < t_end, rt_data)
+		Tₐ = mean(rt_data[:, "Temp [C]"])
+	end
+	Tₐ
 end
 
 # ╔═╡ f68fcc2b-7f79-4896-83a7-f0141e8bf02d
@@ -112,7 +119,8 @@ begin
 	scatter!(data[:, "Time [min]"], data[:, "Temp [C]"], label="data")
 	lines!(t, T_model.(t, τ_opt), label="model", color="red", linestyle=:dash)
 	hlines!(ax, Tₐ, style=:dash, color=:gray)
-	axislegend()
+	# ylims!(20., 23)
+	axislegend(position=:rb)
 	fig
 end
 
@@ -137,7 +145,7 @@ StatsBase = "~0.33.16"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.7.1"
+julia_version = "1.7.2"
 manifest_format = "2.0"
 
 [[deps.AbstractFFTs]]
