@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.17.2
+# v0.17.7
 
 using Markdown
 using InteractiveUtils
@@ -12,7 +12,7 @@ update_theme!(fontsize=20, linewidth=4)
 
 # ╔═╡ c29b70e0-07a6-4cb1-9999-69b1f95bcc2a
 begin
-	filename = "orange4_fruit.csv"
+	filename = "navalorange.csv"
 	
 	data = CSV.read(joinpath("..", "Arduino Results", filename), DataFrame)
 	
@@ -72,7 +72,7 @@ T₀ = data[1, "Temp [C]"]
 md"for insipration see [here](https://github.com/SimonEnsemble/control_theory_demos/blob/master/studios/fitting%20empirical%20models.ipynb)"
 
 # ╔═╡ 67d76287-592c-498a-8f14-a0589dae84c5
-function T_model(t, τ)
+function T_model(t, τ, T₀, Tₐ)
     if t < 0.0
         error("invalid for t < 0")
 	end
@@ -86,7 +86,7 @@ function cost(τ)
 		tᵢ = row["Time [min]"]
 		Tᵢ = row["Temp [C]"]
 		
-        ℓ += (Tᵢ - T_model(tᵢ, τ)) ^ 2
+        ℓ += (Tᵢ - T_model(tᵢ, τ, T₀, Tₐ)) ^ 2
     end
     return ℓ
 end
@@ -112,16 +112,71 @@ end
 
 # ╔═╡ bc90f7e1-95b0-455c-bba6-846403d6cbb3
 begin
-	t = range(0.0, 250.0, length=200)
+	t = range(0.0, 450.0, length=200)
 	
 	local fig = Figure()
 	local ax  = Axis(fig[1, 1], xlabel="time, t [min]", ylabel="temperature, T(t) [°C]")
 	scatter!(data[:, "Time [min]"], data[:, "Temp [C]"], label="data")
-	lines!(t, T_model.(t, τ_opt), label="model", color="red", linestyle=:dash)
+	lines!(t, T_model.(t, τ_opt, T₀, Tₐ), label="model", color="red", linestyle=:dash)
 	hlines!(ax, Tₐ, style=:dash, color=:gray)
 	# ylims!(20., 23)
 	axislegend(position=:rb)
 	fig
+end
+
+# ╔═╡ 557d7a3d-37de-41af-8507-475f58802d9d
+# Part 2: Using τ for repeated experiment
+begin
+	filename_2 = "navaltimes2.csv"
+	
+	data_2 = CSV.read(joinpath("..", "Arduino Results", filename_2), DataFrame)
+	
+	data_2[:, "Time [s]"] = data_2[:, "Time [ms]"] / 1000.0
+	data_2[:, "Time [min]"] = data_2[:, "Time [s]"] / 60.0
+	data_2 = data_2[:, ["Time [min]", "Temp [C]"]]
+	data_2
+end
+
+# ╔═╡ ee9a4c1f-83d0-4c27-8428-49b01ba21906
+#Tₐ = mean(data[end-5:end, "Temp [C]"]) +0.1 # °C (TODO: get from sensor)
+begin
+	estimate_Tₐ_from_end_2 = true
+	if estimate_Tₐ_from_end_2
+		Tₐ_2 = mean(data_2[end-10:end, "Temp [C]"])
+	else
+		rt_data_2 = CSV.read(joinpath("..", "Arduino Results", "orange$(expt_no)_room.csv"), DataFrame)
+		rt_data_2[:, "Time [min]"] = rt_data_2[:, "Time [ms]"] / 1000.0 / 60.0
+		t_end_2 = 3.0 # min
+		filter!(row -> row["Time [min]"] < t_end_2, rt_data_2)
+		Tₐ_2 = mean(rt_data_2[:, "Temp [C]"])
+	end
+	Tₐ_2
+end
+
+# ╔═╡ d7da430c-dbcc-45e0-a8f9-d617afb3ba7c
+t_new_start_2 = 4.0
+
+# ╔═╡ 6ba40972-39a3-44a3-8507-612f0e1e29f4
+filter!(row -> row["Time [min]"] > t_new_start_2, data_2)
+
+# ╔═╡ 7e37b66a-bfd3-42bc-8665-478ae621c1f2
+T₀_2 = data_2[1, "Temp [C]"]
+
+# ╔═╡ 8cc7a1e2-26e0-4bc4-a84c-6adf678c36a7
+viz_data(data_2, Tₐ_2)
+
+# ╔═╡ 74f08a41-1ed6-4328-b1d5-212d8373dd20
+begin
+	t_2 = range(0.0, 375, length=200)
+	
+	local fig_2 = Figure()
+	local ax_2  = Axis(fig_2[1, 1], xlabel="time, t [min]", ylabel="temperature, T(t) [°C]")
+	scatter!(data_2[:, "Time [min]"], data_2[:, "Temp [C]"], label="data")
+	lines!(t_2, T_model.(t_2, τ_opt, T₀_2, Tₐ_2), label="model", color="red", linestyle=:dash)
+	hlines!(ax_2, Tₐ_2, style=:dash, color=:gray)
+	# ylims!(20., 23)
+	axislegend(position=:rb)
+	fig_2
 end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -145,7 +200,7 @@ StatsBase = "~0.33.16"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.7.2"
+julia_version = "1.7.1"
 manifest_format = "2.0"
 
 [[deps.AbstractFFTs]]
@@ -1429,5 +1484,12 @@ version = "3.5.0+0"
 # ╠═cb17b065-6f1b-45ca-b529-eaf61aef9404
 # ╠═591cfced-dd71-4cd4-85cc-0fdf5bb2594e
 # ╠═bc90f7e1-95b0-455c-bba6-846403d6cbb3
+# ╠═557d7a3d-37de-41af-8507-475f58802d9d
+# ╠═ee9a4c1f-83d0-4c27-8428-49b01ba21906
+# ╠═d7da430c-dbcc-45e0-a8f9-d617afb3ba7c
+# ╠═6ba40972-39a3-44a3-8507-612f0e1e29f4
+# ╠═7e37b66a-bfd3-42bc-8665-478ae621c1f2
+# ╠═8cc7a1e2-26e0-4bc4-a84c-6adf678c36a7
+# ╠═74f08a41-1ed6-4328-b1d5-212d8373dd20
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
