@@ -5,7 +5,7 @@ using Markdown
 using InteractiveUtils
 
 # ╔═╡ a9ad09a2-81f6-11ec-2768-87de554ed581
-using CairoMakie, Optim, CSV, DataFrames, StatsBase
+using CairoMakie, Optim, CSV, DataFrames, StatsBase, JLD2
 
 # ╔═╡ c2f4d731-8ba6-4f2c-9006-2f8adc9235dc
 update_theme!(fontsize=20, linewidth=4)
@@ -15,7 +15,7 @@ md"Part 1: Inverse Problem of Using Data to Derive Tau"
 
 # ╔═╡ c29b70e0-07a6-4cb1-9999-69b1f95bcc2a
 begin
-	filename = "best_navalorange_1.csv"
+	filename = "best_navalorange_2.csv"
 	
 	data = CSV.read(joinpath("..", "Arduino Results", filename), DataFrame)
 	
@@ -29,19 +29,7 @@ end
 md"assume air temperature is given as average temperature recorded over last 50 s"
 
 # ╔═╡ 6ad47dbb-6513-4f18-9f44-cc82b26555b5
-begin
-	estimate_Tₐ_from_end = true
-	if estimate_Tₐ_from_end
-		Tₐ = mean(data[end-10:end, "Temp [C]"])
-	else
-		rt_data = CSV.read(joinpath("..", "Arduino Results", "orange$(expt_no)_room.csv"), DataFrame)
-		rt_data[:, "Time [min]"] = rt_data[:, "Time [ms]"] / 1000.0 / 60.0
-		t_end = 3.0 # min
-		filter!(row -> row["Time [min]"] < t_end, rt_data)
-		Tₐ = mean(rt_data[:, "Temp [C]"])
-	end
-	Tₐ
-end
+Tₐ = mean(data[end-20:end, "Temp [C]"])
 
 # ╔═╡ f68fcc2b-7f79-4896-83a7-f0141e8bf02d
 function viz_data(data::DataFrame, Tₐ::Float64)
@@ -59,7 +47,11 @@ viz_data(data, Tₐ)
 md"Define New Starting Point (Filter Out Pre-Connection Data)"
 
 # ╔═╡ 927f48f6-7731-4d1b-bdf4-37d7c5c78b7c
-t_new_start = 4.0
+if filename == "best_navalorange_1.csv"
+	t_new_start = 4.0
+elseif filename == "best_navalorange_2.csv"
+	t_new_start = 4.0
+end
 
 # ╔═╡ 8bdedac3-5672-428a-ae83-2ffbab210c60
 filter!(row -> row["Time [min]"] > t_new_start, data)
@@ -75,6 +67,9 @@ md"Derive intial tempurature from first data point"
 
 # ╔═╡ dd37ff0f-fc4f-4076-9da5-f7735ac3d829
 T₀ = data[1, "Temp [C]"]
+
+# ╔═╡ 322c60c0-1e04-4bd8-a3f9-2802e8deb605
+jldsave("nice_data.jld2"; data, T₀, Tₐ)
 
 # ╔═╡ 4418399f-1356-4e5b-82a1-b4c608e5c285
 md"for insipration see [here](https://github.com/SimonEnsemble/control_theory_demos/blob/master/studios/fitting%20empirical%20models.ipynb)"
@@ -192,6 +187,7 @@ PLUTO_PROJECT_TOML_CONTENTS = """
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
 Optim = "429524aa-4258-5aef-a3af-852621145aeb"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
@@ -199,6 +195,7 @@ StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 CSV = "~0.10.2"
 CairoMakie = "~0.7.2"
 DataFrames = "~1.3.2"
+JLD2 = "~0.4.22"
 Optim = "~1.6.0"
 StatsBase = "~0.33.16"
 """
@@ -207,7 +204,7 @@ StatsBase = "~0.33.16"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.7.1"
+julia_version = "1.7.2"
 manifest_format = "2.0"
 
 [[deps.AbstractFFTs]]
@@ -712,6 +709,12 @@ version = "1.4.0"
 git-tree-sha1 = "a3f24677c21f5bbe9d2a714f95dcd58337fb2856"
 uuid = "82899510-4779-5014-852e-03e436cf321d"
 version = "1.0.0"
+
+[[deps.JLD2]]
+deps = ["FileIO", "MacroTools", "Mmap", "OrderedCollections", "Pkg", "Printf", "Reexport", "TranscodingStreams", "UUIDs"]
+git-tree-sha1 = "81b9477b49402b47fbe7f7ae0b252077f53e4a08"
+uuid = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
+version = "0.4.22"
 
 [[deps.JLLWrappers]]
 deps = ["Preferences"]
@@ -1487,6 +1490,7 @@ version = "3.5.0+0"
 # ╠═d9ca96e3-263c-4c50-995b-d6c1abb8f4c1
 # ╟─16e7fb6f-8e8a-4dc2-9274-7f4fe698f39d
 # ╠═dd37ff0f-fc4f-4076-9da5-f7735ac3d829
+# ╠═322c60c0-1e04-4bd8-a3f9-2802e8deb605
 # ╟─4418399f-1356-4e5b-82a1-b4c608e5c285
 # ╠═67d76287-592c-498a-8f14-a0589dae84c5
 # ╠═51f47395-da6c-484e-a313-0da2b2b916d9
