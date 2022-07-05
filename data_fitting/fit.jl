@@ -10,9 +10,12 @@ using CairoMakie, Optim, CSV, DataFrames, StatsBase
 # ╔═╡ c2f4d731-8ba6-4f2c-9006-2f8adc9235dc
 update_theme!(fontsize=20, linewidth=4)
 
+# ╔═╡ e9b2163a-b8b4-4e8e-9cfd-39b4d840e617
+md"Part 1: Inverse Problem of Using Data to Derive Tau"
+
 # ╔═╡ c29b70e0-07a6-4cb1-9999-69b1f95bcc2a
 begin
-	filename = "navalorange.csv"
+	filename = "best_navalorange_1.csv"
 	
 	data = CSV.read(joinpath("..", "Arduino Results", filename), DataFrame)
 	
@@ -26,7 +29,6 @@ end
 md"assume air temperature is given as average temperature recorded over last 50 s"
 
 # ╔═╡ 6ad47dbb-6513-4f18-9f44-cc82b26555b5
-#Tₐ = mean(data[end-5:end, "Temp [C]"]) +0.1 # °C (TODO: get from sensor)
 begin
 	estimate_Tₐ_from_end = true
 	if estimate_Tₐ_from_end
@@ -53,8 +55,11 @@ end
 # ╔═╡ 9c6d23d9-fcc2-4704-86c5-50a13d6af2e0
 viz_data(data, Tₐ)
 
+# ╔═╡ ed811e67-f56e-4b67-bd10-22cca013bc4a
+md"Define New Starting Point (Filter Out Pre-Connection Data)"
+
 # ╔═╡ 927f48f6-7731-4d1b-bdf4-37d7c5c78b7c
-t_new_start = 3.0
+t_new_start = 4.0
 
 # ╔═╡ 8bdedac3-5672-428a-ae83-2ffbab210c60
 filter!(row -> row["Time [min]"] > t_new_start, data)
@@ -64,6 +69,9 @@ data[:, "Time [min]"] = data[:, "Time [min]"] .- t_new_start
 
 # ╔═╡ d9ca96e3-263c-4c50-995b-d6c1abb8f4c1
 viz_data(data, Tₐ)
+
+# ╔═╡ 16e7fb6f-8e8a-4dc2-9274-7f4fe698f39d
+md"Derive intial tempurature from first data point"
 
 # ╔═╡ dd37ff0f-fc4f-4076-9da5-f7735ac3d829
 T₀ = data[1, "Temp [C]"]
@@ -112,7 +120,7 @@ end
 
 # ╔═╡ bc90f7e1-95b0-455c-bba6-846403d6cbb3
 begin
-	t = range(0.0, 450.0, length=200)
+	t = range(0.0, 600.0, length=200)
 	
 	local fig = Figure()
 	local ax  = Axis(fig[1, 1], xlabel="time, t [min]", ylabel="temperature, T(t) [°C]")
@@ -124,11 +132,14 @@ begin
 	fig
 end
 
+# ╔═╡ 7a8fbec8-875c-49cb-9a72-af9126706e74
+md"Part 2: Using Tau as a reusable constant"
+
 # ╔═╡ 557d7a3d-37de-41af-8507-475f58802d9d
-# Part 2: Using τ for repeated experiment
 begin
-	filename_2 = "navaltimes2.csv"
-	
+	filename_2 = "best_navalorange_2_filtered.csv"
+
+	# Assuming data for second set up in the exact same maner
 	data_2 = CSV.read(joinpath("..", "Arduino Results", filename_2), DataFrame)
 	
 	data_2[:, "Time [s]"] = data_2[:, "Time [ms]"] / 1000.0
@@ -138,26 +149,19 @@ begin
 end
 
 # ╔═╡ ee9a4c1f-83d0-4c27-8428-49b01ba21906
-#Tₐ = mean(data[end-5:end, "Temp [C]"]) +0.1 # °C (TODO: get from sensor)
-begin
-	estimate_Tₐ_from_end_2 = true
-	if estimate_Tₐ_from_end_2
-		Tₐ_2 = mean(data_2[end-10:end, "Temp [C]"])
-	else
-		rt_data_2 = CSV.read(joinpath("..", "Arduino Results", "orange$(expt_no)_room.csv"), DataFrame)
-		rt_data_2[:, "Time [min]"] = rt_data_2[:, "Time [ms]"] / 1000.0 / 60.0
-		t_end_2 = 3.0 # min
-		filter!(row -> row["Time [min]"] < t_end_2, rt_data_2)
-		Tₐ_2 = mean(rt_data_2[:, "Temp [C]"])
-	end
-	Tₐ_2
-end
+Tₐ_2 = mean(data_2[end-10:end, "Temp [C]"])
+
+# ╔═╡ 779a0241-6bd7-4a2a-93e9-d2572807714e
+md"Use filtering at the beggining"
 
 # ╔═╡ d7da430c-dbcc-45e0-a8f9-d617afb3ba7c
-t_new_start_2 = 4.0
+t_new_start_2 = 3.0
 
 # ╔═╡ 6ba40972-39a3-44a3-8507-612f0e1e29f4
 filter!(row -> row["Time [min]"] > t_new_start_2, data_2)
+
+# ╔═╡ e246c78a-99bd-4b99-85b0-53ef2b589be9
+data_2[:, "Time [min]"] = data_2[:, "Time [min]"] .- t_new_start_2
 
 # ╔═╡ 7e37b66a-bfd3-42bc-8665-478ae621c1f2
 T₀_2 = data_2[1, "Temp [C]"]
@@ -165,9 +169,12 @@ T₀_2 = data_2[1, "Temp [C]"]
 # ╔═╡ 8cc7a1e2-26e0-4bc4-a84c-6adf678c36a7
 viz_data(data_2, Tₐ_2)
 
+# ╔═╡ d00edac6-fb14-406a-9296-87fcac5291a3
+md"Now visualize the data, and plot using the same estimated curve with the same Tau"
+
 # ╔═╡ 74f08a41-1ed6-4328-b1d5-212d8373dd20
 begin
-	t_2 = range(0.0, 375, length=200)
+	t_2 = range(0.0, 430.0, length=200)
 	
 	local fig_2 = Figure()
 	local ax_2  = Axis(fig_2[1, 1], xlabel="time, t [min]", ylabel="temperature, T(t) [°C]")
@@ -1467,15 +1474,18 @@ version = "3.5.0+0"
 # ╔═╡ Cell order:
 # ╠═a9ad09a2-81f6-11ec-2768-87de554ed581
 # ╠═c2f4d731-8ba6-4f2c-9006-2f8adc9235dc
+# ╟─e9b2163a-b8b4-4e8e-9cfd-39b4d840e617
 # ╠═c29b70e0-07a6-4cb1-9999-69b1f95bcc2a
 # ╟─3977f8c5-6af3-4343-8659-4d4ee28e1ed7
 # ╠═6ad47dbb-6513-4f18-9f44-cc82b26555b5
 # ╠═f68fcc2b-7f79-4896-83a7-f0141e8bf02d
 # ╠═9c6d23d9-fcc2-4704-86c5-50a13d6af2e0
+# ╟─ed811e67-f56e-4b67-bd10-22cca013bc4a
 # ╠═927f48f6-7731-4d1b-bdf4-37d7c5c78b7c
 # ╠═8bdedac3-5672-428a-ae83-2ffbab210c60
 # ╠═99bc8668-a2d3-47f5-9f22-cb178a415d9f
 # ╠═d9ca96e3-263c-4c50-995b-d6c1abb8f4c1
+# ╟─16e7fb6f-8e8a-4dc2-9274-7f4fe698f39d
 # ╠═dd37ff0f-fc4f-4076-9da5-f7735ac3d829
 # ╟─4418399f-1356-4e5b-82a1-b4c608e5c285
 # ╠═67d76287-592c-498a-8f14-a0589dae84c5
@@ -1484,12 +1494,16 @@ version = "3.5.0+0"
 # ╠═cb17b065-6f1b-45ca-b529-eaf61aef9404
 # ╠═591cfced-dd71-4cd4-85cc-0fdf5bb2594e
 # ╠═bc90f7e1-95b0-455c-bba6-846403d6cbb3
+# ╟─7a8fbec8-875c-49cb-9a72-af9126706e74
 # ╠═557d7a3d-37de-41af-8507-475f58802d9d
 # ╠═ee9a4c1f-83d0-4c27-8428-49b01ba21906
+# ╟─779a0241-6bd7-4a2a-93e9-d2572807714e
 # ╠═d7da430c-dbcc-45e0-a8f9-d617afb3ba7c
 # ╠═6ba40972-39a3-44a3-8507-612f0e1e29f4
+# ╠═e246c78a-99bd-4b99-85b0-53ef2b589be9
 # ╠═7e37b66a-bfd3-42bc-8665-478ae621c1f2
 # ╠═8cc7a1e2-26e0-4bc4-a84c-6adf678c36a7
+# ╟─d00edac6-fb14-406a-9296-87fcac5291a3
 # ╠═74f08a41-1ed6-4328-b1d5-212d8373dd20
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
