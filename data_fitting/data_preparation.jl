@@ -65,7 +65,7 @@ data
 
 # ╔═╡ f950ade9-1a1a-4398-a954-635d03599afa
 function downsample!(data::DataFrame, n::Int)
-	id_sample = sort(sample(1:nrow(data), n, replace=false))
+	id_sample = vcat([1], sort(sample(2:nrow(data), n-1, replace=false)))
 	deleteat!(data, [i for i = 1:nrow(data) if ! (i in id_sample)])
 end
 
