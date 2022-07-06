@@ -21,8 +21,11 @@ function read_data(filename::String)
 	return data[:, ["t [min]", "T [°C]"]]
 end
 
+# ╔═╡ 3c2e28af-1506-4ca6-be48-4e38bd67097d
+run = 2
+
 # ╔═╡ 60a97118-1fc1-403b-97fa-fce162e8d6fd
-filename = "best_navalorange_2.csv"
+filename = "best_navalorange_$run.csv"
 
 # ╔═╡ c270b07b-4a3c-448e-a93c-10b961a644f9
 data = read_data(filename)
@@ -48,7 +51,7 @@ function time_shift!(data::DataFrame, t₀::Float64)
 end
 
 # ╔═╡ ee150e92-5c2c-4bf1-b97d-e14c5f642839
-time_shift!(data, 5.0)
+time_shift!(data, run == 1 ? 5.0 : 6.0)
 
 # ╔═╡ 0e5b8843-e07a-4efb-b758-8ec75503881f
 data
@@ -74,7 +77,7 @@ viz_data(data, Tₐ)
 T₀ = data[1, "T [°C]"]
 
 # ╔═╡ 322c60c0-1e04-4bd8-a3f9-2802e8deb605
-jldsave("nice_data.jld2"; data, T₀, Tₐ)
+jldsave("nice_data_run_$run.jld2"; data, T₀, Tₐ)
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -1396,6 +1399,7 @@ version = "3.5.0+0"
 # ╠═a9ad09a2-81f6-11ec-2768-87de554ed581
 # ╠═c2f4d731-8ba6-4f2c-9006-2f8adc9235dc
 # ╠═cc51a112-7d01-46d0-86b0-85e142a6b7ca
+# ╠═3c2e28af-1506-4ca6-be48-4e38bd67097d
 # ╠═60a97118-1fc1-403b-97fa-fce162e8d6fd
 # ╠═c270b07b-4a3c-448e-a93c-10b961a644f9
 # ╠═28d92414-f199-433b-9d3e-e16e5e4b6aa8

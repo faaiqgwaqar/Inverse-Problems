@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.17.7
+# v0.19.8
 
 using Markdown
 using InteractiveUtils
@@ -10,72 +10,20 @@ using CairoMakie, Optim, CSV, DataFrames, StatsBase, JLD2
 # ╔═╡ c2f4d731-8ba6-4f2c-9006-2f8adc9235dc
 update_theme!(fontsize=20, linewidth=4)
 
-# ╔═╡ e9b2163a-b8b4-4e8e-9cfd-39b4d840e617
-md"Part 1: Inverse Problem of Using Data to Derive Tau"
+# ╔═╡ 7113d877-34b9-46e8-8416-423c9058fbfe
+run = 1
 
-# ╔═╡ c29b70e0-07a6-4cb1-9999-69b1f95bcc2a
-begin
-	filename = "best_navalorange_2.csv"
-	
-	data = CSV.read(joinpath("..", "Arduino Results", filename), DataFrame)
-	
-	data[:, "Time [s]"] = data[:, "Time [ms]"] / 1000.0
-	data[:, "Time [min]"] = data[:, "Time [s]"] / 60.0
-	data = data[:, ["Time [min]", "Temp [C]"]]
-	data
-end
+# ╔═╡ 95d5eb21-f4d0-477d-b44f-bb803cb0eac4
+data = load("nice_data_run_$run.jld2")["data"]
 
-# ╔═╡ 3977f8c5-6af3-4343-8659-4d4ee28e1ed7
-md"assume air temperature is given as average temperature recorded over last 50 s"
+# ╔═╡ 4cab8fc4-c613-4142-b6b7-3b69c58a8b52
+Tₐ = load("nice_data_run_$run.jld2")["Tₐ"]
 
-# ╔═╡ 6ad47dbb-6513-4f18-9f44-cc82b26555b5
-Tₐ = mean(data[end-20:end, "Temp [C]"])
-
-# ╔═╡ f68fcc2b-7f79-4896-83a7-f0141e8bf02d
-function viz_data(data::DataFrame, Tₐ::Float64)
-	fig = Figure()
-	ax  = Axis(fig[1, 1], xlabel="time, t [min]", ylabel="temperature, T(t) [°C]")
-	scatter!(data[:, "Time [min]"], data[:, "Temp [C]"])
-	hlines!(ax, Tₐ, style=:dash, color=:gray)
-	fig
-end
-
-# ╔═╡ 9c6d23d9-fcc2-4704-86c5-50a13d6af2e0
-viz_data(data, Tₐ)
-
-# ╔═╡ ed811e67-f56e-4b67-bd10-22cca013bc4a
-md"Define New Starting Point (Filter Out Pre-Connection Data)"
-
-# ╔═╡ 927f48f6-7731-4d1b-bdf4-37d7c5c78b7c
-if filename == "best_navalorange_1.csv"
-	t_new_start = 4.0
-elseif filename == "best_navalorange_2.csv"
-	t_new_start = 4.0
-end
-
-# ╔═╡ 8bdedac3-5672-428a-ae83-2ffbab210c60
-filter!(row -> row["Time [min]"] > t_new_start, data)
-
-# ╔═╡ 99bc8668-a2d3-47f5-9f22-cb178a415d9f
-data[:, "Time [min]"] = data[:, "Time [min]"] .- t_new_start
-
-# ╔═╡ d9ca96e3-263c-4c50-995b-d6c1abb8f4c1
-viz_data(data, Tₐ)
-
-# ╔═╡ 16e7fb6f-8e8a-4dc2-9274-7f4fe698f39d
-md"Derive intial tempurature from first data point"
-
-# ╔═╡ dd37ff0f-fc4f-4076-9da5-f7735ac3d829
-T₀ = data[1, "Temp [C]"]
-
-# ╔═╡ 322c60c0-1e04-4bd8-a3f9-2802e8deb605
-jldsave("nice_data.jld2"; data, T₀, Tₐ)
-
-# ╔═╡ 4418399f-1356-4e5b-82a1-b4c608e5c285
-md"for insipration see [here](https://github.com/SimonEnsemble/control_theory_demos/blob/master/studios/fitting%20empirical%20models.ipynb)"
+# ╔═╡ 705303c7-81d7-4966-9717-572fb72044fc
+T₀ = load("nice_data_run_$run.jld2")["T₀"]
 
 # ╔═╡ 67d76287-592c-498a-8f14-a0589dae84c5
-function T_model(t, τ, T₀, Tₐ)
+function T_model(t::Float64, τ::Float64, T₀::Float64, Tₐ::Float64)
     if t < 0.0
         error("invalid for t < 0")
 	end
@@ -86,8 +34,8 @@ end
 function cost(τ)
     ℓ = 0.0
     for row in eachrow(data)
-		tᵢ = row["Time [min]"]
-		Tᵢ = row["Temp [C]"]
+		tᵢ = row["t [min]"]
+		Tᵢ = row["T [°C]"]
 		
         ℓ += (Tᵢ - T_model(tᵢ, τ, T₀, Tₐ)) ^ 2
     end
@@ -101,85 +49,57 @@ opt_res = optimize(cost, 0.0, 200.0)
 τ_opt = opt_res.minimizer
 
 # ╔═╡ 591cfced-dd71-4cd4-85cc-0fdf5bb2594e
-begin
+function viz_loss(τ_opt)
 	τs = range(0.0, 200.0, length=100)
-	
-	local fig = Figure()
-	local ax  = Axis(fig[1, 1], 
-		             xlabel="time constant, τ [min]", 
-		             ylabel="cost [(°C)²]")
+	fig = Figure()
+	ax  = Axis(fig[1, 1], 
+			   xlabel="time constant, τ [min]", 
+			   ylabel="loss, ℓ(τ) [(°C)²]")
 	lines!(τs, cost.(τs))
+	xlims!(0.0, 200.0)
 	vlines!(ax, τ_opt, style=:dash, color=:gray)
 	fig
 end
 
-# ╔═╡ bc90f7e1-95b0-455c-bba6-846403d6cbb3
-begin
-	t = range(0.0, 600.0, length=200)
-	
-	local fig = Figure()
-	local ax  = Axis(fig[1, 1], xlabel="time, t [min]", ylabel="temperature, T(t) [°C]")
-	scatter!(data[:, "Time [min]"], data[:, "Temp [C]"], label="data")
-	lines!(t, T_model.(t, τ_opt, T₀, Tₐ), label="model", color="red", linestyle=:dash)
-	hlines!(ax, Tₐ, style=:dash, color=:gray)
-	# ylims!(20., 23)
+# ╔═╡ ca41cf71-1d6e-4374-bb23-3297f3dc1abb
+viz_loss(τ_opt)
+
+# ╔═╡ 062f53a9-ef55-4ce4-9521-9e183af1d07c
+function viz_fit(data::DataFrame, Tₐ::Float64, T₀::Float64, τ_opt::Float64)
+	t = range(0.0, maximum(data[:, "t [min]"])*1.05, length=200)
+
+	fig = Figure()
+	ax  = Axis(fig[1, 1], 
+		       xlabel="time, t [min]",
+		       ylabel="temperature, T(t) [°C]",
+		       xgridstyle=:dash, ygridstyle = :dash,
+               xtickalign=1, ytickalign=1
+	)
+	scatter!(data[:, "t [min]"], data[:, "T [°C]"], label="data")
+	lines!(t, T_model.(t, τ_opt, T₀, Tₐ), 
+		label="model", color="red", linestyle=:dash)
+	hlines!(ax, Tₐ, style=:dash, color=:gray, linestyle=:dash)
 	axislegend(position=:rb)
 	fig
 end
 
-# ╔═╡ 7a8fbec8-875c-49cb-9a72-af9126706e74
-md"Part 2: Using Tau as a reusable constant"
+# ╔═╡ 74159a75-1978-4417-a6d4-72a8b99cca66
+viz_fit(data, Tₐ, T₀, τ_opt)
 
-# ╔═╡ 557d7a3d-37de-41af-8507-475f58802d9d
-begin
-	filename_2 = "best_navalorange_2_filtered.csv"
+# ╔═╡ 244cd52e-f409-41ec-9f34-9c03f5cac974
+other_run = run == 1 ? 2 : 1
 
-	# Assuming data for second set up in the exact same maner
-	data_2 = CSV.read(joinpath("..", "Arduino Results", filename_2), DataFrame)
-	
-	data_2[:, "Time [s]"] = data_2[:, "Time [ms]"] / 1000.0
-	data_2[:, "Time [min]"] = data_2[:, "Time [s]"] / 60.0
-	data_2 = data_2[:, ["Time [min]", "Temp [C]"]]
-	data_2
-end
+# ╔═╡ cfdd329e-403b-4a7c-8115-1fe9d299bd75
+data_other_run = load("nice_data_run_$other_run.jld2")["data"]
 
-# ╔═╡ ee9a4c1f-83d0-4c27-8428-49b01ba21906
-Tₐ_2 = mean(data_2[end-10:end, "Temp [C]"])
+# ╔═╡ 52917bbb-12c2-4990-ba21-209bb440558d
+Tₐ_other_run = load("nice_data_run_$other_run.jld2")["Tₐ"]
 
-# ╔═╡ 779a0241-6bd7-4a2a-93e9-d2572807714e
-md"Use filtering at the beggining"
+# ╔═╡ a14e90dd-3522-44e8-a0ee-8d8ceb8ac3ae
+T₀_other_run = load("nice_data_run_$other_run.jld2")["T₀"]
 
-# ╔═╡ d7da430c-dbcc-45e0-a8f9-d617afb3ba7c
-t_new_start_2 = 3.0
-
-# ╔═╡ 6ba40972-39a3-44a3-8507-612f0e1e29f4
-filter!(row -> row["Time [min]"] > t_new_start_2, data_2)
-
-# ╔═╡ e246c78a-99bd-4b99-85b0-53ef2b589be9
-data_2[:, "Time [min]"] = data_2[:, "Time [min]"] .- t_new_start_2
-
-# ╔═╡ 7e37b66a-bfd3-42bc-8665-478ae621c1f2
-T₀_2 = data_2[1, "Temp [C]"]
-
-# ╔═╡ 8cc7a1e2-26e0-4bc4-a84c-6adf678c36a7
-viz_data(data_2, Tₐ_2)
-
-# ╔═╡ d00edac6-fb14-406a-9296-87fcac5291a3
-md"Now visualize the data, and plot using the same estimated curve with the same Tau"
-
-# ╔═╡ 74f08a41-1ed6-4328-b1d5-212d8373dd20
-begin
-	t_2 = range(0.0, 430.0, length=200)
-	
-	local fig_2 = Figure()
-	local ax_2  = Axis(fig_2[1, 1], xlabel="time, t [min]", ylabel="temperature, T(t) [°C]")
-	scatter!(data_2[:, "Time [min]"], data_2[:, "Temp [C]"], label="data")
-	lines!(t_2, T_model.(t_2, τ_opt, T₀_2, Tₐ_2), label="model", color="red", linestyle=:dash)
-	hlines!(ax_2, Tₐ_2, style=:dash, color=:gray)
-	# ylims!(20., 23)
-	axislegend(position=:rb)
-	fig_2
-end
+# ╔═╡ 915124cb-87d0-446f-b972-6fcc7aa27312
+viz_fit(data_other_run, Tₐ_other_run, T₀_other_run, τ_opt)
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -204,8 +124,9 @@ StatsBase = "~0.33.16"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.7.2"
+julia_version = "1.8.0-DEV.1390"
 manifest_format = "2.0"
+project_hash = "0a132109cd6aeebf232475d62d966ef750533393"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra"]
@@ -232,6 +153,7 @@ version = "0.4.1"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
+version = "1.1.1"
 
 [[deps.ArrayInterface]]
 deps = ["Compat", "IfElse", "LinearAlgebra", "Requires", "SparseArrays", "Static"]
@@ -361,6 +283,7 @@ version = "3.42.0"
 [[deps.CompilerSupportLibraries_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
+version = "0.5.0+0"
 
 [[deps.Contour]]
 deps = ["StaticArrays"]
@@ -438,8 +361,9 @@ uuid = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
 version = "0.8.6"
 
 [[deps.Downloads]]
-deps = ["ArgTools", "LibCURL", "NetworkOptions"]
+deps = ["ArgTools", "FileWatching", "LibCURL", "NetworkOptions"]
 uuid = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
+version = "1.6.0"
 
 [[deps.DualNumbers]]
 deps = ["Calculus", "NaNMath", "SpecialFunctions"]
@@ -499,6 +423,9 @@ deps = ["Compat", "Dates", "Mmap", "Printf", "Test", "UUIDs"]
 git-tree-sha1 = "129b104185df66e408edd6625d480b7f9e9823a0"
 uuid = "48062228-2e41-5def-b9a4-89aafe57970f"
 version = "0.9.18"
+
+[[deps.FileWatching]]
+uuid = "7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"
 
 [[deps.FillArrays]]
 deps = ["LinearAlgebra", "Random", "SparseArrays", "Statistics"]
@@ -770,10 +697,12 @@ uuid = "4af54fe1-eca0-43a8-85a7-787d91b784e3"
 [[deps.LibCURL]]
 deps = ["LibCURL_jll", "MozillaCACerts_jll"]
 uuid = "b27032c2-a3e7-50c8-80cd-2d36dbcbfd21"
+version = "0.6.3"
 
 [[deps.LibCURL_jll]]
 deps = ["Artifacts", "LibSSH2_jll", "Libdl", "MbedTLS_jll", "Zlib_jll", "nghttp2_jll"]
 uuid = "deac9b47-8bc7-5906-a0fe-35ac56dc84c0"
+version = "7.73.0+4"
 
 [[deps.LibGit2]]
 deps = ["Base64", "NetworkOptions", "Printf", "SHA"]
@@ -782,6 +711,7 @@ uuid = "76f85450-5226-5b5a-8eaa-529ad045b433"
 [[deps.LibSSH2_jll]]
 deps = ["Artifacts", "Libdl", "MbedTLS_jll"]
 uuid = "29816b5a-b9ab-546f-933c-edad1886dfa8"
+version = "1.9.1+2"
 
 [[deps.Libdl]]
 uuid = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
@@ -888,6 +818,7 @@ version = "0.2.1"
 [[deps.MbedTLS_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "c8ffd9c3-330d-5841-b78e-0817d7145fa1"
+version = "2.24.0+2"
 
 [[deps.Missings]]
 deps = ["DataAPI"]
@@ -906,6 +837,7 @@ version = "0.3.3"
 
 [[deps.MozillaCACerts_jll]]
 uuid = "14a3606d-f60d-562e-9121-12d972cd8159"
+version = "2020.7.22"
 
 [[deps.NLSolversBase]]
 deps = ["DiffResults", "Distributed", "FiniteDiff", "ForwardDiff"]
@@ -926,6 +858,7 @@ version = "1.0.2"
 
 [[deps.NetworkOptions]]
 uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
+version = "1.2.0"
 
 [[deps.Observables]]
 git-tree-sha1 = "fe29afdef3d0c4a8286128d4e45cc50621b1e43d"
@@ -947,6 +880,7 @@ version = "1.3.5+1"
 [[deps.OpenBLAS_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
 uuid = "4536629a-c528-5b80-bd46-f80d51c5b363"
+version = "0.3.17+2"
 
 [[deps.OpenEXR]]
 deps = ["Colors", "FileIO", "OpenEXR_jll"]
@@ -963,6 +897,7 @@ version = "3.1.1+0"
 [[deps.OpenLibm_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "05823500-19ac-5b8b-9628-191a04bc5112"
+version = "0.8.1+0"
 
 [[deps.OpenSSL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1050,6 +985,7 @@ version = "0.40.1+0"
 [[deps.Pkg]]
 deps = ["Artifacts", "Dates", "Downloads", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "REPL", "Random", "SHA", "Serialization", "TOML", "Tar", "UUIDs", "p7zip_jll"]
 uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
+version = "1.8.0"
 
 [[deps.PkgVersion]]
 deps = ["Pkg"]
@@ -1159,6 +1095,7 @@ version = "0.3.0+0"
 
 [[deps.SHA]]
 uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
+version = "0.7.0"
 
 [[deps.SIMD]]
 git-tree-sha1 = "7dbc15af7ed5f751a82bf3ed37757adf76c32402"
@@ -1280,6 +1217,7 @@ uuid = "4607b0f0-06f3-5cda-b6b1-a6196a1729e9"
 [[deps.TOML]]
 deps = ["Dates"]
 uuid = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
+version = "1.0.0"
 
 [[deps.TableTraits]]
 deps = ["IteratorInterfaceExtensions"]
@@ -1296,6 +1234,7 @@ version = "1.7.0"
 [[deps.Tar]]
 deps = ["ArgTools", "SHA"]
 uuid = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
+version = "1.10.0"
 
 [[deps.TensorCore]]
 deps = ["LinearAlgebra"]
@@ -1412,6 +1351,7 @@ version = "1.4.0+3"
 [[deps.Zlib_jll]]
 deps = ["Libdl"]
 uuid = "83775a58-1f1d-513f-b197-d71354ab007a"
+version = "1.2.12+1"
 
 [[deps.isoband_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1428,6 +1368,7 @@ version = "0.15.1+0"
 [[deps.libblastrampoline_jll]]
 deps = ["Artifacts", "Libdl", "OpenBLAS_jll"]
 uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
+version = "4.0.0+0"
 
 [[deps.libfdk_aac_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1456,10 +1397,12 @@ version = "1.3.7+1"
 [[deps.nghttp2_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "8e850ede-7688-5339-a07c-302acd2aaf8d"
+version = "1.41.0+1"
 
 [[deps.p7zip_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
+version = "16.2.1+1"
 
 [[deps.x264_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1477,37 +1420,22 @@ version = "3.5.0+0"
 # ╔═╡ Cell order:
 # ╠═a9ad09a2-81f6-11ec-2768-87de554ed581
 # ╠═c2f4d731-8ba6-4f2c-9006-2f8adc9235dc
-# ╟─e9b2163a-b8b4-4e8e-9cfd-39b4d840e617
-# ╠═c29b70e0-07a6-4cb1-9999-69b1f95bcc2a
-# ╟─3977f8c5-6af3-4343-8659-4d4ee28e1ed7
-# ╠═6ad47dbb-6513-4f18-9f44-cc82b26555b5
-# ╠═f68fcc2b-7f79-4896-83a7-f0141e8bf02d
-# ╠═9c6d23d9-fcc2-4704-86c5-50a13d6af2e0
-# ╟─ed811e67-f56e-4b67-bd10-22cca013bc4a
-# ╠═927f48f6-7731-4d1b-bdf4-37d7c5c78b7c
-# ╠═8bdedac3-5672-428a-ae83-2ffbab210c60
-# ╠═99bc8668-a2d3-47f5-9f22-cb178a415d9f
-# ╠═d9ca96e3-263c-4c50-995b-d6c1abb8f4c1
-# ╟─16e7fb6f-8e8a-4dc2-9274-7f4fe698f39d
-# ╠═dd37ff0f-fc4f-4076-9da5-f7735ac3d829
-# ╠═322c60c0-1e04-4bd8-a3f9-2802e8deb605
-# ╟─4418399f-1356-4e5b-82a1-b4c608e5c285
+# ╠═7113d877-34b9-46e8-8416-423c9058fbfe
+# ╠═95d5eb21-f4d0-477d-b44f-bb803cb0eac4
+# ╠═4cab8fc4-c613-4142-b6b7-3b69c58a8b52
+# ╠═705303c7-81d7-4966-9717-572fb72044fc
 # ╠═67d76287-592c-498a-8f14-a0589dae84c5
 # ╠═51f47395-da6c-484e-a313-0da2b2b916d9
 # ╠═ea783d58-f6ea-49ba-8c19-df301b9a4294
 # ╠═cb17b065-6f1b-45ca-b529-eaf61aef9404
 # ╠═591cfced-dd71-4cd4-85cc-0fdf5bb2594e
-# ╠═bc90f7e1-95b0-455c-bba6-846403d6cbb3
-# ╟─7a8fbec8-875c-49cb-9a72-af9126706e74
-# ╠═557d7a3d-37de-41af-8507-475f58802d9d
-# ╠═ee9a4c1f-83d0-4c27-8428-49b01ba21906
-# ╟─779a0241-6bd7-4a2a-93e9-d2572807714e
-# ╠═d7da430c-dbcc-45e0-a8f9-d617afb3ba7c
-# ╠═6ba40972-39a3-44a3-8507-612f0e1e29f4
-# ╠═e246c78a-99bd-4b99-85b0-53ef2b589be9
-# ╠═7e37b66a-bfd3-42bc-8665-478ae621c1f2
-# ╠═8cc7a1e2-26e0-4bc4-a84c-6adf678c36a7
-# ╟─d00edac6-fb14-406a-9296-87fcac5291a3
-# ╠═74f08a41-1ed6-4328-b1d5-212d8373dd20
+# ╠═ca41cf71-1d6e-4374-bb23-3297f3dc1abb
+# ╠═062f53a9-ef55-4ce4-9521-9e183af1d07c
+# ╠═74159a75-1978-4417-a6d4-72a8b99cca66
+# ╠═244cd52e-f409-41ec-9f34-9c03f5cac974
+# ╠═cfdd329e-403b-4a7c-8115-1fe9d299bd75
+# ╠═52917bbb-12c2-4990-ba21-209bb440558d
+# ╠═a14e90dd-3522-44e8-a0ee-8d8ceb8ac3ae
+# ╠═915124cb-87d0-446f-b972-6fcc7aa27312
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
