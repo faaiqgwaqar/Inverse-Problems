@@ -29,7 +29,7 @@ function read_data(filename::String)
 end
 
 # ╔═╡ 3c2e28af-1506-4ca6-be48-4e38bd67097d
-run = 2
+run = 1
 
 # ╔═╡ 60a97118-1fc1-403b-97fa-fce162e8d6fd
 filename = "best_navalorange_$run.csv"
@@ -74,6 +74,8 @@ downsample!(data, 100)
 
 # ╔═╡ f68fcc2b-7f79-4896-83a7-f0141e8bf02d
 function viz_data(data::DataFrame, Tₐ::Float64)
+	max_t = maximum(data[:, "t [min]"])
+	
 	fig = Figure()
 	ax  = Axis(fig[1, 1], 
 		       xlabel="time, t [min]",
@@ -84,6 +86,7 @@ function viz_data(data::DataFrame, Tₐ::Float64)
 	scatter!(data[:, "t [min]"], data[:, "T [°C]"], 
 		label="{(tᵢ, Tᵢ)}", strokewidth=1)
 	axislegend(position=:rb)
+	xlims!(-0.03*max_t, 1.03*max_t)
 	fig
 end
 
