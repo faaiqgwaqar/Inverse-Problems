@@ -1,11 +1,24 @@
 ### A Pluto.jl notebook ###
-# v0.19.8
+# v0.19.9
 
 using Markdown
 using InteractiveUtils
 
 # ╔═╡ 43bcf4b0-fbfc-11ec-0e23-bb05c02078c9
-using DataFrames, Turing, LinearAlgebra,Random, JLD2, CairoMakie
+using DataFrames, Distributions, Turing, LinearAlgebra,Random, JLD2, CairoMakie, ColorSchemes, StatsBase
+
+# ╔═╡ a081eb2c-ff46-4efa-a6cd-ee3e9209e14e
+my_colors = ColorSchemes.Hokusai3
+
+# ╔═╡ 7f7f3c12-343c-4e19-8371-a065bb9051cb
+update_theme!(
+	fontsize=20, 
+	linewidth=4, 
+	Axis=(; xgridstyle=:dash, ygridstyle=:dash, xtickalign=1, ytickalign=1),
+	resolution=(500, 380),
+	palette = (color=my_colors, 
+	           marker=[:circle, :utriangle, :cross, :rect, :diamond, :dtriangle, :pentagon, :xcross])
+)
 
 # ╔═╡ b29797b9-7e2f-4d55-bc39-dba5ad7663de
 md"# identify τ"
@@ -16,11 +29,9 @@ run = 1
 # ╔═╡ d32079ef-7ebd-4645-9789-1d258b13b66f
 data = load("nice_data_run_$run.jld2")["data"]
 
-# ╔═╡ b047b0c3-99ba-46a1-b673-a28e577606ae
-T₀ = load("nice_data_run_$run.jld2")["T₀"]
-
-# ╔═╡ 29fe3416-221a-40a6-a8ff-dc6b96455616
-Tₐ = load("nice_data_run_$run.jld2")["Tₐ"]
+# ╔═╡ b8a3fc88-6e4d-457d-8582-f6302fb206ac
+fixed_params = (T₀=load("nice_data_run_$run.jld2")["T₀"], 
+                Tₐ=load("nice_data_run_$run.jld2")["Tₐ"])
 
 # ╔═╡ a13ba151-99c1-47ae-b96e-dc90464990b6
 function T_model(t, τ, T₀, Tₐ)
@@ -31,7 +42,7 @@ function T_model(t, τ, T₀, Tₐ)
 end
 
 # ╔═╡ ecd4ea3f-1775-4c4e-a679-f8e15eaad3f7
-@model function my_model(data)
+@model function identify_τ(data, fixed_params)
     # Prior distributions.
     σ ~ Uniform(0.0, 3.0) # °C
 	τ ~ Uniform(5.0, 60.0 * 3)
@@ -39,7 +50,7 @@ end
     # Observations.
     for i in 1:nrow(data)
 		tᵢ = data[i, "t [min]"]
-		μ = T_model(tᵢ, τ, T₀, Tₐ)
+		μ = T_model(tᵢ, τ, fixed_params.T₀, fixed_params.Tₐ)
         data[i, "T [°C]"] ~ Normal(μ, σ^2)
     end
 
@@ -47,51 +58,195 @@ end
 end
 
 # ╔═╡ 2e57666d-b3f4-451e-86fd-781217c1258d
-model = my_model(data)
+model_τ = identify_τ(data, fixed_params)
 
 # ╔═╡ bb3ae6a9-5d87-4b90-978e-8674f6c5bd99
-chain = sample(model, NUTS(0.5), 1_000; progress=true)
+chain_τ = sample(model_τ, NUTS(), 1_000; progress=true)
 
-# ╔═╡ d0358fde-7b35-40ae-89be-4dbb4acc3b27
-τs = Array(chain[:τ])[:]
+# ╔═╡ ff7e4fd8-e34b-478e-ab8a-2f35aba99ba6
+function analyze_posterior(chain::Chains, param::Symbol)
+	θs = Array(chain[param])[:]
+	
+	μ = mean(θs)
+	σ = std(θs)
+	
+	lb = percentile(θs, 5.0)
+	ub = percentile(θs, 95.0)
+	
+	return (;μ=μ, σ=σ, lb=lb, ub=ub, samples=θs)
+end
 
-# ╔═╡ d26caf98-9598-4505-9f7a-2d6f56ae74f9
-τ̄ = mean(τs)
-
-# ╔═╡ ac5ca2f6-f85f-4904-b1c4-a2519eb03436
-σ²_τ = var(τs)
+# ╔═╡ 90b568ea-62a7-45e7-bcbb-29a03bb71f48
+analyze_posterior(chain_τ, :τ)
 
 # ╔═╡ a1e622ae-7672-4ca2-bac2-7dcc0a500f1f
-function viz_posterior_τ(τs)
+function viz_posterior_τ(chain::Chains)
+	τ = analyze_posterior(chain, :τ)
+	
 	fig = Figure()
-	ax  = Axis(fig[1, 1], xlabel="τ [min]", ylabel="# samples from posterior")
-	hist!(τs)
+	ax  = Axis(fig[1, 1], 
+		xlabel="time constant, τ [min]", 
+		ylabel="# posterior samples")
+	ylims!(0, nothing)
+	hist!(τ.samples, color=my_colors[2])
+	lines!([τ.lb, τ.ub], [0, 0], color="black", linewidth=10)
 	fig
 end
 
 # ╔═╡ 294e240f-c146-4ef3-b172-26e70ad3ed19
-viz_posterior_τ(τs)
+viz_posterior_τ(chain_τ)
+
+# ╔═╡ 6c797a4b-f692-4312-b434-a662f5c41343
+function viz_fit_τ(data::DataFrame, fixed_params::NamedTuple, chain::Chains)
+	max_t = maximum(data[:, "t [min]"])
+    t = range(0.0, maximum(data[:, "t [min]"])*1.05, length=200)
+
+	τ = analyze_posterior(chain, :τ)
+	
+	fig = Figure()
+	ax  = Axis(fig[1, 1], 
+		       xlabel="time, t [min]",
+		       ylabel="temperature [°C]",
+               xtickalign=1, ytickalign=1
+	)
+	hlines!(ax, fixed_params.Tₐ, style=:dash, 
+		    linestyle=:dot, label="Tₐ", color=Cycled(3))
+	lines!(t, T_model.(t, τ.μ, fixed_params.T₀, fixed_params.Tₐ),
+        label="model", color=my_colors[6])
+	band!(t, T_model.(t, τ.lb, fixed_params.T₀, fixed_params.Tₐ), 
+		     T_model.(t, τ.ub, fixed_params.T₀, fixed_params.Tₐ), 
+		color=(my_colors[6], 0.25))
+	scatter!(data[:, "t [min]"], data[:, "T [°C]"], 
+		label="{(tᵢ, Tᵢ)}", strokewidth=1)
+	axislegend(position=:rb)
+	xlims!(-0.03*max_t, 1.03*max_t)
+	fig
+end
+
+# ╔═╡ 38bf810d-b588-426c-81e7-a036ea7083f3
+viz_fit_τ(data, fixed_params, chain_τ)
 
 # ╔═╡ d8e026b9-8943-437e-a08b-2395de35d705
 md"# inverse problem"
 
-# ╔═╡ 8dbbbe1c-4eb6-4ac2-a447-bbaa500e03b4
+# ╔═╡ 7df25291-a600-449e-a194-3ec7c3f11361
+other_run = run == 1 ? 2 : 1
 
+# ╔═╡ 8f145533-7208-4c25-9b1e-84370c7ac7ca
+data2 = load("nice_data_run_$other_run.jld2")["data"]
+
+# ╔═╡ 0bff14a8-89eb-488c-88c6-e08a64e577ed
+fixed_params2 = (T₀=load("nice_data_run_$other_run.jld2")["T₀"], 
+                 Tₐ=load("nice_data_run_$other_run.jld2")["Tₐ"])
+
+# ╔═╡ e2ad524c-9d8b-4b85-81d5-96fc3303e4fa
+σ_prior = analyze_posterior(chain_τ, :σ)
+
+# ╔═╡ 4e68878f-c278-4218-8a52-ce86490981da
+τ_prior = analyze_posterior(chain_τ, :τ)
+
+# ╔═╡ 8dbbbe1c-4eb6-4ac2-a447-bbaa500e03b4
+@model function identify_T₀(data, i_obs, Tₐ)
+    # Prior distributions.
+	T₀ ~ Uniform(0.0, data[i_obs, "T [°C]"]) # TODO is this allowed? I think so b/c unphysical otherwise. essentially declares likelihood as zero that temp higher.
+    σ ~ Normal(σ_prior.μ, 10 * σ_prior.σ^2) # °C
+	τ ~ Normal(τ_prior.μ, 10 * τ_prior.σ^2)
+
+    # Observation
+	tᵢ = data[i_obs, "t [min]"]
+	μ = T_model(tᵢ, τ, T₀, Tₐ)
+	data[i_obs, "T [°C]"] ~ Normal(μ, σ^2)
+
+    return nothing
+end
+
+# ╔═╡ 62c5e645-285d-470e-b46b-00f0471b7329
+i_obs = 40
+
+# ╔═╡ efdf4047-81ab-45db-9980-267df2bad314
+model_T₀ = identify_T₀(data2, i_obs, fixed_params2.Tₐ)
+
+# ╔═╡ 287fd4e2-3afd-4540-be15-f2a486e36e37
+chain_T₀ = sample(model_T₀, NUTS(), 1_000; progress=true)
+
+# ╔═╡ 282f22da-b95a-41b2-a98a-12c6acd7bc06
+function viz_posterior_T₀(chain::Chains)
+	T₀ = analyze_posterior(chain_T₀, :T₀)
+	
+	fig = Figure()
+	ax  = Axis(fig[1, 1], 
+		xlabel="initial temperature, T₀ [°C]", 
+		ylabel="# posterior samples")
+	ylims!(0, nothing)
+	hist!(T₀.samples, color=my_colors[3])
+	lines!([T₀.lb, T₀.ub], [0, 0], color="black", linewidth=10)
+	fig
+end
+
+# ╔═╡ bd5602cd-8b6d-430f-a700-40b449d1da27
+viz_posterior_T₀(chain_T₀)
+
+# ╔═╡ d959317b-3f19-495e-95ac-50a8fecd659f
+posterior_samples = DataFrame(sample(chain_T₀[[:τ, :T₀]], 300; replace=false))
+
+# ╔═╡ d592943d-2402-4857-9509-4ae74dee26c4
+function viz_fit_T₀(data::DataFrame, i_obs::Int, Tₐ::Float64, chain::Chains)
+	max_t = maximum(data[:, "t [min]"])
+    t = range(0.0, max_t*1.05, length=200)
+
+	τ = analyze_posterior(chain, :τ)
+	T₀ = analyze_posterior(chain, :T₀)
+	
+	fig = Figure()
+	ax  = Axis(fig[1, 1], 
+		       xlabel="time, t [min]",
+		       ylabel="temperature [°C]",
+               xtickalign=1, ytickalign=1
+	)
+	hlines!(ax, Tₐ, style=:dash, linestyle=:dot, label="Tₐ", color=Cycled(3))
+	scatter!(data[:, "t [min]"], data[:, "T [°C]"], 
+		label="{(tᵢ, Tᵢ)} (unobs)", strokewidth=1, color=(:white, 0.0))
+	lines!(t, T_model.(t, τ.μ, T₀.μ, Tₐ),
+        label="model", color=my_colors[6])
+	band!(t, T_model.(t, τ.μ, T₀.lb, Tₐ), T_model.(t, τ.μ, T₀.ub, Tₐ), 
+		color=(my_colors[6], 0.25))
+	# if ! isnothing(chains)
+	# 	posterior_samples = DataFrame(sample(chain_T₀[[:τ, :T₀]], 100; replace=false))
+	# 	for row in eachrow(posterior_samples)
+	# 		lines!(t, T_model.(t, row[:τ], row[:T₀], params.Tₐ),
+ #        			color=("gray", 0.2), linestyle=:dash)
+	# 	end
+	# end
+	scatter!([data[i_obs, "t [min]"]], [data[i_obs, "T [°C]"]], 
+		label="(tₖ, Tₖ) (obs)", strokewidth=1)
+	axislegend(position=:rb)
+	xlims!(-0.03*max_t, 1.03*max_t)
+	fig
+end
+
+# ╔═╡ 007ae23e-7572-4075-859b-451b379be0e6
+viz_fit_T₀(data2, i_obs, fixed_params2.Tₐ, chain_T₀)
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
+ColorSchemes = "35d6a980-a343-548e-a6ea-1d62b119f2f4"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 Turing = "fce5fe82-541a-59a6-adf8-730c64b5f9a0"
 
 [compat]
 CairoMakie = "~0.8.8"
+ColorSchemes = "~3.19.0"
 DataFrames = "~1.3.4"
+Distributions = "~0.25.64"
 JLD2 = "~0.4.22"
+StatsBase = "~0.33.18"
 Turing = "~0.21.9"
 """
 
@@ -99,9 +254,8 @@ Turing = "~0.21.9"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.8.0-DEV.1390"
+julia_version = "1.7.3"
 manifest_format = "2.0"
-project_hash = "1da8d9a177159517f1f5a5a4aaf45083fbb008ca"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra"]
@@ -122,9 +276,9 @@ uuid = "7a57a42e-76ec-4ea3-a279-07e840d6d9cf"
 version = "0.5.2"
 
 [[deps.AbstractTrees]]
-git-tree-sha1 = "5c0b629df8a5566a06f5fef5100b53ea56e465a0"
+git-tree-sha1 = "03e0550477d86222521d254b741d470ba17ea0b5"
 uuid = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"
-version = "0.4.2"
+version = "0.3.4"
 
 [[deps.Adapt]]
 deps = ["LinearAlgebra"]
@@ -169,7 +323,6 @@ version = "2.3.0"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
-version = "1.1.1"
 
 [[deps.ArrayInterfaceCore]]
 deps = ["LinearAlgebra", "SparseArrays", "SuiteSparse"]
@@ -260,10 +413,10 @@ uuid = "49dc2e85-a5d0-5ad3-a950-438e2897f1b9"
 version = "0.5.1"
 
 [[deps.ChainRules]]
-deps = ["ChainRulesCore", "Compat", "IrrationalConstants", "LinearAlgebra", "Random", "RealDot", "SparseArrays", "Statistics"]
-git-tree-sha1 = "b06ed86d99c982cbe9047a45a93ac62d9605a361"
+deps = ["ChainRulesCore", "Compat", "Distributed", "IrrationalConstants", "LinearAlgebra", "Random", "RealDot", "SparseArrays", "Statistics"]
+git-tree-sha1 = "cc81c5c6bab557f89e4b5951b252d7ab863639a4"
 uuid = "082447d4-558c-5d27-93f4-14fc19e9eca2"
-version = "1.36.2"
+version = "1.37.0"
 
 [[deps.ChainRulesCore]]
 deps = ["Compat", "LinearAlgebra", "SparseArrays"]
@@ -332,7 +485,6 @@ version = "3.45.0"
 [[deps.CompilerSupportLibraries_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
-version = "0.5.0+0"
 
 [[deps.CompositionsBase]]
 git-tree-sha1 = "455419f7e328a1a2493cabc6428d79e951349769"
@@ -440,7 +592,6 @@ version = "0.8.6"
 [[deps.Downloads]]
 deps = ["ArgTools", "FileWatching", "LibCURL", "NetworkOptions"]
 uuid = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
-version = "1.6.0"
 
 [[deps.DualNumbers]]
 deps = ["Calculus", "NaNMath", "SpecialFunctions"]
@@ -611,9 +762,9 @@ version = "1.3.14+0"
 
 [[deps.GridLayoutBase]]
 deps = ["GeometryBasics", "InteractiveUtils", "Observables"]
-git-tree-sha1 = "a88992eaa3073e65c970ce73f4636c080b68e21e"
+git-tree-sha1 = "9d9c9b62f0f63242b8f5a9c33bbcda5f3ac5c551"
 uuid = "3955a311-db13-416c-9275-1d80ed98e5e9"
-version = "0.7.9"
+version = "0.7.10"
 
 [[deps.Grisu]]
 git-tree-sha1 = "53bb909d1151e57e2484c3d1b53e19552b887fb2"
@@ -792,15 +943,19 @@ git-tree-sha1 = "a560dd966b386ac9ae60bdd3a3d3a326062d3c3e"
 uuid = "8cdb02fc-e678-4876-92c5-9defec4f444e"
 version = "0.3.1"
 
+[[deps.LeftChildRightSiblingTrees]]
+deps = ["AbstractTrees"]
+git-tree-sha1 = "b864cb409e8e445688bc478ef87c0afe4f6d1f8d"
+uuid = "1d6d02ad-be62-4b6b-8a6d-2f90e265016e"
+version = "0.1.3"
+
 [[deps.LibCURL]]
 deps = ["LibCURL_jll", "MozillaCACerts_jll"]
 uuid = "b27032c2-a3e7-50c8-80cd-2d36dbcbfd21"
-version = "0.6.3"
 
 [[deps.LibCURL_jll]]
 deps = ["Artifacts", "LibSSH2_jll", "Libdl", "MbedTLS_jll", "Zlib_jll", "nghttp2_jll"]
 uuid = "deac9b47-8bc7-5906-a0fe-35ac56dc84c0"
-version = "7.73.0+4"
 
 [[deps.LibGit2]]
 deps = ["Base64", "NetworkOptions", "Printf", "SHA"]
@@ -809,7 +964,6 @@ uuid = "76f85450-5226-5b5a-8eaa-529ad045b433"
 [[deps.LibSSH2_jll]]
 deps = ["Artifacts", "Libdl", "MbedTLS_jll"]
 uuid = "29816b5a-b9ab-546f-933c-edad1886dfa8"
-version = "1.9.1+2"
 
 [[deps.Libdl]]
 uuid = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
@@ -895,9 +1049,9 @@ version = "2022.0.0+0"
 
 [[deps.MLJModelInterface]]
 deps = ["Random", "ScientificTypesBase", "StatisticalTraits"]
-git-tree-sha1 = "b8073fe6973dcfad5fec803dabc1d3a7f6c4ebc8"
+git-tree-sha1 = "b40406d53e5805b709159f3d510a12339318eb98"
 uuid = "e80e1ace-859a-464e-9ed9-23947d8ae3ea"
-version = "1.4.3"
+version = "1.4.4"
 
 [[deps.MacroTools]]
 deps = ["Markdown", "Random"]
@@ -940,7 +1094,6 @@ version = "0.4.3"
 [[deps.MbedTLS_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "c8ffd9c3-330d-5841-b78e-0817d7145fa1"
-version = "2.24.0+2"
 
 [[deps.MicroCollections]]
 deps = ["BangBang", "InitialValues", "Setfield"]
@@ -965,7 +1118,6 @@ version = "0.3.3"
 
 [[deps.MozillaCACerts_jll]]
 uuid = "14a3606d-f60d-562e-9121-12d972cd8159"
-version = "2020.7.22"
 
 [[deps.NNlib]]
 deps = ["Adapt", "ChainRulesCore", "LinearAlgebra", "Pkg", "Requires", "Statistics"]
@@ -974,9 +1126,9 @@ uuid = "872c559c-99b0-510c-b3b7-b6c96a88d5cd"
 version = "0.8.8"
 
 [[deps.NaNMath]]
-git-tree-sha1 = "b086b7ea07f8e38cf122f5016af580881ac914fe"
+git-tree-sha1 = "737a5957f387b17e74d4ad2f440eb330b39a62c5"
 uuid = "77ba4419-2d1f-58cd-9bb1-8ffee604a2e3"
-version = "0.3.7"
+version = "1.0.0"
 
 [[deps.NamedArrays]]
 deps = ["Combinatorics", "DataStructures", "DelimitedFiles", "InvertedIndices", "LinearAlgebra", "Random", "Requires", "SparseArrays", "Statistics"]
@@ -997,7 +1149,6 @@ version = "1.0.2"
 
 [[deps.NetworkOptions]]
 uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
-version = "1.2.0"
 
 [[deps.Observables]]
 git-tree-sha1 = "dfd8d34871bc3ad08cd16026c1828e271d554db9"
@@ -1019,7 +1170,6 @@ version = "1.3.5+1"
 [[deps.OpenBLAS_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
 uuid = "4536629a-c528-5b80-bd46-f80d51c5b363"
-version = "0.3.17+2"
 
 [[deps.OpenEXR]]
 deps = ["Colors", "FileIO", "OpenEXR_jll"]
@@ -1036,7 +1186,6 @@ version = "3.1.1+0"
 [[deps.OpenLibm_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "05823500-19ac-5b8b-9628-191a04bc5112"
-version = "0.8.1+0"
 
 [[deps.OpenSSL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1069,9 +1218,9 @@ version = "8.44.0+0"
 
 [[deps.PDMats]]
 deps = ["LinearAlgebra", "SparseArrays", "SuiteSparse"]
-git-tree-sha1 = "ca433b9e2f5ca3a0ce6702a032fce95a3b6e1e48"
+git-tree-sha1 = "9351c1a6c0e922cc862bd96822a98c9029a6d142"
 uuid = "90014a1f-27ba-587c-ab20-58faa44d9150"
-version = "0.11.14"
+version = "0.11.15"
 
 [[deps.PNGFiles]]
 deps = ["Base64", "CEnum", "ImageCore", "IndirectArrays", "OffsetArrays", "libpng_jll"]
@@ -1112,7 +1261,6 @@ version = "0.40.1+0"
 [[deps.Pkg]]
 deps = ["Artifacts", "Dates", "Downloads", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "REPL", "Random", "SHA", "Serialization", "TOML", "Tar", "UUIDs", "p7zip_jll"]
 uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
-version = "1.8.0"
 
 [[deps.PkgVersion]]
 deps = ["Pkg"]
@@ -1220,9 +1368,9 @@ version = "1.2.2"
 
 [[deps.RelocatableFolders]]
 deps = ["SHA", "Scratch"]
-git-tree-sha1 = "cdbd3b1338c72ce29d9584fdbe9e9b70eeb5adca"
+git-tree-sha1 = "22c5201127d7b243b9ee1de3b43c408879dff60f"
 uuid = "05181044-ff0b-4ac5-8273-598c1e38db00"
-version = "0.1.3"
+version = "0.3.0"
 
 [[deps.Requires]]
 deps = ["UUIDs"]
@@ -1250,7 +1398,6 @@ version = "2.0.1"
 
 [[deps.SHA]]
 uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
-version = "0.7.0"
 
 [[deps.SIMD]]
 git-tree-sha1 = "7dbc15af7ed5f751a82bf3ed37757adf76c32402"
@@ -1394,7 +1541,6 @@ uuid = "4607b0f0-06f3-5cda-b6b1-a6196a1729e9"
 [[deps.TOML]]
 deps = ["Dates"]
 uuid = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
-version = "1.0.0"
 
 [[deps.TableTraits]]
 deps = ["IteratorInterfaceExtensions"]
@@ -1411,7 +1557,6 @@ version = "1.7.0"
 [[deps.Tar]]
 deps = ["ArgTools", "SHA"]
 uuid = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
-version = "1.10.0"
 
 [[deps.TensorCore]]
 deps = ["LinearAlgebra"]
@@ -1420,10 +1565,10 @@ uuid = "62fd8b95-f654-4bbd-a8a5-9c27f68ccd50"
 version = "0.1.1"
 
 [[deps.TerminalLoggers]]
-deps = ["Logging", "Printf"]
-git-tree-sha1 = "987a3ebb20307530775f4def7eb9109cfa881748"
+deps = ["LeftChildRightSiblingTrees", "Logging", "Markdown", "Printf", "ProgressLogging", "UUIDs"]
+git-tree-sha1 = "62846a48a6cd70e63aa29944b8c4ef704360d72f"
 uuid = "5d786b92-1e48-4d6f-9151-6b4477ca9bed"
-version = "0.1.0"
+version = "0.1.5"
 
 [[deps.Test]]
 deps = ["InteractiveUtils", "Logging", "Random", "Serialization"]
@@ -1552,7 +1697,6 @@ version = "1.4.0+3"
 [[deps.Zlib_jll]]
 deps = ["Libdl"]
 uuid = "83775a58-1f1d-513f-b197-d71354ab007a"
-version = "1.2.12+1"
 
 [[deps.ZygoteRules]]
 deps = ["MacroTools"]
@@ -1575,7 +1719,6 @@ version = "0.15.1+0"
 [[deps.libblastrampoline_jll]]
 deps = ["Artifacts", "Libdl", "OpenBLAS_jll"]
 uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
-version = "4.0.0+0"
 
 [[deps.libfdk_aac_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1604,12 +1747,10 @@ version = "1.3.7+1"
 [[deps.nghttp2_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "8e850ede-7688-5339-a07c-302acd2aaf8d"
-version = "1.41.0+1"
 
 [[deps.p7zip_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
-version = "16.2.1+1"
 
 [[deps.x264_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1626,21 +1767,36 @@ version = "3.5.0+0"
 
 # ╔═╡ Cell order:
 # ╠═43bcf4b0-fbfc-11ec-0e23-bb05c02078c9
+# ╠═a081eb2c-ff46-4efa-a6cd-ee3e9209e14e
+# ╠═7f7f3c12-343c-4e19-8371-a065bb9051cb
 # ╟─b29797b9-7e2f-4d55-bc39-dba5ad7663de
 # ╠═269ac9fa-13f3-443a-8669-e8f13d3518a6
 # ╠═d32079ef-7ebd-4645-9789-1d258b13b66f
-# ╠═b047b0c3-99ba-46a1-b673-a28e577606ae
-# ╠═29fe3416-221a-40a6-a8ff-dc6b96455616
+# ╠═b8a3fc88-6e4d-457d-8582-f6302fb206ac
 # ╠═a13ba151-99c1-47ae-b96e-dc90464990b6
 # ╠═ecd4ea3f-1775-4c4e-a679-f8e15eaad3f7
 # ╠═2e57666d-b3f4-451e-86fd-781217c1258d
 # ╠═bb3ae6a9-5d87-4b90-978e-8674f6c5bd99
-# ╠═d0358fde-7b35-40ae-89be-4dbb4acc3b27
-# ╠═d26caf98-9598-4505-9f7a-2d6f56ae74f9
-# ╠═ac5ca2f6-f85f-4904-b1c4-a2519eb03436
+# ╠═ff7e4fd8-e34b-478e-ab8a-2f35aba99ba6
+# ╠═90b568ea-62a7-45e7-bcbb-29a03bb71f48
 # ╠═a1e622ae-7672-4ca2-bac2-7dcc0a500f1f
 # ╠═294e240f-c146-4ef3-b172-26e70ad3ed19
+# ╠═6c797a4b-f692-4312-b434-a662f5c41343
+# ╠═38bf810d-b588-426c-81e7-a036ea7083f3
 # ╟─d8e026b9-8943-437e-a08b-2395de35d705
+# ╠═7df25291-a600-449e-a194-3ec7c3f11361
+# ╠═8f145533-7208-4c25-9b1e-84370c7ac7ca
+# ╠═0bff14a8-89eb-488c-88c6-e08a64e577ed
+# ╠═e2ad524c-9d8b-4b85-81d5-96fc3303e4fa
+# ╠═4e68878f-c278-4218-8a52-ce86490981da
 # ╠═8dbbbe1c-4eb6-4ac2-a447-bbaa500e03b4
+# ╠═62c5e645-285d-470e-b46b-00f0471b7329
+# ╠═efdf4047-81ab-45db-9980-267df2bad314
+# ╠═287fd4e2-3afd-4540-be15-f2a486e36e37
+# ╠═282f22da-b95a-41b2-a98a-12c6acd7bc06
+# ╠═bd5602cd-8b6d-430f-a700-40b449d1da27
+# ╠═d959317b-3f19-495e-95ac-50a8fecd659f
+# ╠═d592943d-2402-4857-9509-4ae74dee26c4
+# ╠═007ae23e-7572-4075-859b-451b379be0e6
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
