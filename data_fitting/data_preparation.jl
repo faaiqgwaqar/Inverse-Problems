@@ -29,13 +29,10 @@ function read_data(filename::String)
 end
 
 # ╔═╡ 3c2e28af-1506-4ca6-be48-4e38bd67097d
-run = 1
+run = 2
 
 # ╔═╡ 60a97118-1fc1-403b-97fa-fce162e8d6fd
-filename = "best_navalorange_$run.csv"
-
-# ╔═╡ c270b07b-4a3c-448e-a93c-10b961a644f9
-data = read_data(filename)
+filename = "limev$run.csv"
 
 # ╔═╡ 28d92414-f199-433b-9d3e-e16e5e4b6aa8
 """
@@ -48,9 +45,6 @@ function compute_Tₐ(data::DataFrame)
 	return mean(data_end[:, "T [°C]"])
 end
 
-# ╔═╡ 6ad47dbb-6513-4f18-9f44-cc82b26555b5
-Tₐ = compute_Tₐ(data)
-
 # ╔═╡ b4914849-aa69-4523-9acf-9ecde0ee5ee3
 function time_shift!(data::DataFrame, t₀::Float64)
 	filter!(row -> row["t [min]"] > t₀, data)
@@ -58,7 +52,20 @@ function time_shift!(data::DataFrame, t₀::Float64)
 end
 
 # ╔═╡ ee150e92-5c2c-4bf1-b97d-e14c5f642839
-time_shift!(data, run == 1 ? 5.0 : 6.0)
+begin
+	data = read_data(filename)
+	if filename == "limev1.csv"
+		time_shift!(data, 5.0)
+		# air gets hotter at end.
+		filter!(row -> row["t [min]"] < 500.0, data)
+	elseif filename == "limev2.csv"
+		time_shift!(data, 5.0)
+	end
+	data
+end
+
+# ╔═╡ 6ad47dbb-6513-4f18-9f44-cc82b26555b5
+Tₐ = compute_Tₐ(data)
 
 # ╔═╡ 0e5b8843-e07a-4efb-b758-8ec75503881f
 data
@@ -87,11 +94,15 @@ function viz_data(data::DataFrame, Tₐ::Float64)
 		label="{(tᵢ, Tᵢ)}", strokewidth=1)
 	axislegend(position=:rb)
 	xlims!(-0.03*max_t, 1.03*max_t)
+	# xlims!(0, 10)
 	fig
 end
 
 # ╔═╡ 9c6d23d9-fcc2-4704-86c5-50a13d6af2e0
 viz_data(data, Tₐ)
+
+# ╔═╡ 710112f1-e54a-4e1e-8f5e-ad79a76149f4
+data
 
 # ╔═╡ dd37ff0f-fc4f-4076-9da5-f7735ac3d829
 T₀ = data[1, "T [°C]"]
@@ -1324,16 +1335,16 @@ version = "3.5.0+0"
 # ╠═cc51a112-7d01-46d0-86b0-85e142a6b7ca
 # ╠═3c2e28af-1506-4ca6-be48-4e38bd67097d
 # ╠═60a97118-1fc1-403b-97fa-fce162e8d6fd
-# ╠═c270b07b-4a3c-448e-a93c-10b961a644f9
 # ╠═28d92414-f199-433b-9d3e-e16e5e4b6aa8
-# ╠═6ad47dbb-6513-4f18-9f44-cc82b26555b5
 # ╠═b4914849-aa69-4523-9acf-9ecde0ee5ee3
 # ╠═ee150e92-5c2c-4bf1-b97d-e14c5f642839
+# ╠═6ad47dbb-6513-4f18-9f44-cc82b26555b5
 # ╠═0e5b8843-e07a-4efb-b758-8ec75503881f
 # ╠═f950ade9-1a1a-4398-a954-635d03599afa
 # ╠═e35322f8-5065-43ef-a846-77de00f4d065
 # ╠═f68fcc2b-7f79-4896-83a7-f0141e8bf02d
 # ╠═9c6d23d9-fcc2-4704-86c5-50a13d6af2e0
+# ╠═710112f1-e54a-4e1e-8f5e-ad79a76149f4
 # ╠═dd37ff0f-fc4f-4076-9da5-f7735ac3d829
 # ╠═322c60c0-1e04-4bd8-a3f9-2802e8deb605
 # ╟─00000000-0000-0000-0000-000000000001
