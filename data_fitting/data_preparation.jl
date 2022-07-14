@@ -64,6 +64,9 @@ begin
 	data
 end
 
+# ╔═╡ 514638ff-0ffe-408a-a5df-c6a7399bceb2
+mean([data[i+1, "t [min]"] - data[i, "t [min]"]  for i = 1:nrow(data)-1])
+
 # ╔═╡ 6ad47dbb-6513-4f18-9f44-cc82b26555b5
 Tₐ = compute_Tₐ(data)
 
@@ -1338,6 +1341,7 @@ version = "3.5.0+0"
 # ╠═28d92414-f199-433b-9d3e-e16e5e4b6aa8
 # ╠═b4914849-aa69-4523-9acf-9ecde0ee5ee3
 # ╠═ee150e92-5c2c-4bf1-b97d-e14c5f642839
+# ╠═514638ff-0ffe-408a-a5df-c6a7399bceb2
 # ╠═6ad47dbb-6513-4f18-9f44-cc82b26555b5
 # ╠═0e5b8843-e07a-4efb-b758-8ec75503881f
 # ╠═f950ade9-1a1a-4398-a954-635d03599afa

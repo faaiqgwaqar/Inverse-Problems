@@ -20,6 +20,31 @@ update_theme!(
 	           marker=[:circle, :utriangle, :cross, :rect, :diamond, :dtriangle, :pentagon, :xcross])
 )
 
+# ╔═╡ a13ba151-99c1-47ae-b96e-dc90464990b6
+function T_model(t, τ, T₀, Tₐ)
+    if t < 0.0
+        error("invalid for t < 0")
+	end
+    return Tₐ .+ (T₀ - Tₐ) * exp(-t / τ)
+end
+
+# ╔═╡ 0176e392-7134-4404-94bc-0b87083fff55
+function T₀_model_iv(t′, T′, τ, Tₐ)
+    return Tₐ - (Tₐ - T′) * exp(t′ / τ)
+end
+
+# ╔═╡ 5f462877-80cb-4ca9-ad7d-29b4b0acb07e
+function plot_Tₐ!(ax, Tₐ)
+	hlines!(ax, Tₐ, style=:dash, 
+		linestyle=:dot, label="Tₐ", color=Cycled(3))
+end
+
+# ╔═╡ 3885aa90-483b-439e-a7cb-34aadf1bc329
+function toy_lims!(ax)
+	xlims!(ax, -10, 550)
+	ylims!(ax, 0.0, 21.0)
+end
+
 # ╔═╡ b29797b9-7e2f-4d55-bc39-dba5ad7663de
 md"# identify τ"
 
@@ -33,19 +58,11 @@ data = load("nice_data_run_$run.jld2")["data"]
 fixed_params = (T₀=load("nice_data_run_$run.jld2")["T₀"], 
                 Tₐ=load("nice_data_run_$run.jld2")["Tₐ"])
 
-# ╔═╡ a13ba151-99c1-47ae-b96e-dc90464990b6
-function T_model(t, τ, T₀, Tₐ)
-    if t < 0.0
-        error("invalid for t < 0")
-	end
-    return Tₐ .+ (T₀ - Tₐ) * exp(-t / τ)
-end
-
 # ╔═╡ ecd4ea3f-1775-4c4e-a679-f8e15eaad3f7
 @model function identify_τ(data, fixed_params)
     # Prior distributions.
-    σ ~ Uniform(0.0, 3.0) # °C
-	τ ~ Uniform(5.0, 60.0 * 3)
+    σ ~ Uniform(0.0, 0.5) # °C
+	τ ~ Uniform(1.0, 60.0 * 4)
 
     # Observations.
     for i in 1:nrow(data)
@@ -112,7 +129,7 @@ function viz_fit_τ(data::DataFrame, fixed_params::NamedTuple, chain::Chains)
 	hlines!(ax, fixed_params.Tₐ, style=:dash, 
 		    linestyle=:dot, label="Tₐ", color=Cycled(3))
 	lines!(t, T_model.(t, τ.μ, fixed_params.T₀, fixed_params.Tₐ),
-        label="model", color=my_colors[6])
+        label="model", color=my_colors[2])
 	band!(t, T_model.(t, τ.lb, fixed_params.T₀, fixed_params.Tₐ), 
 		     T_model.(t, τ.ub, fixed_params.T₀, fixed_params.Tₐ), 
 		color=(my_colors[6], 0.25))
@@ -125,6 +142,40 @@ end
 
 # ╔═╡ 38bf810d-b588-426c-81e7-a036ea7083f3
 viz_fit_τ(data, fixed_params, chain_τ)
+
+# ╔═╡ 02bef073-47ae-4b55-9420-d351220018ae
+md"# illustrate direct problem"
+
+# ╔═╡ 42690c6c-af94-4051-8472-fc7fab9d1d82
+τ̄ = analyze_posterior(chain_τ, :τ).μ
+
+# ╔═╡ 0a5daf81-8840-47d6-bda2-ebf0109f35ed
+begin
+	function direct_problem_toy_viz(data, fixed_params, τ, δ; show_soln=true)
+		t = range(0.0, 550.0, length=100)
+		
+		fig = Figure()
+		ax  = Axis(fig[1, 1], xlabel="time, t [min]", ylabel="temperature, T(t) [°C]")
+		plot_Tₐ!(ax, fixed_params.Tₐ)
+		if show_soln
+			lines!(t, T_model.(t, τ, fixed_params.T₀, fixed_params.Tₐ),
+		        label="model", color=my_colors[2])
+			band!(t, T_model.(t, τ, fixed_params.T₀ - δ, fixed_params.Tₐ),
+				     T_model.(t, τ, fixed_params.T₀ + δ, fixed_params.Tₐ),
+				     color=(my_colors[2], 0.4)
+			)
+		end
+		errorbars!([0], [fixed_params.T₀], δ, δ, 
+			       whiskerwidth=10, linewidth=3, color=:black)
+		scatter!(data[1, "t [min]"], data[1, "T [°C]"], 
+			label="(0, T₀)", strokewidth=1)
+		axislegend(position=:rb)
+		toy_lims!(ax)
+		fig
+	end
+	
+	direct_problem_toy_viz(data, fixed_params, τ̄, 0.5, show_soln=true)
+end
 
 # ╔═╡ d8e026b9-8943-437e-a08b-2395de35d705
 md"# inverse problem"
@@ -148,9 +199,13 @@ fixed_params2 = (T₀=load("nice_data_run_$other_run.jld2")["T₀"],
 # ╔═╡ 8dbbbe1c-4eb6-4ac2-a447-bbaa500e03b4
 @model function identify_T₀(data, i_obs, Tₐ)
     # Prior distributions.
-	T₀ ~ Uniform(0.0, data[i_obs, "T [°C]"]) # TODO is this allowed? I think so b/c unphysical otherwise. essentially declares likelihood as zero that temp higher.
-    σ ~ Normal(σ_prior.μ, 10 * σ_prior.σ^2) # °C
-	τ ~ Normal(τ_prior.μ, 10 * τ_prior.σ^2)
+	T₀ ~ Uniform(0.0, 10.0)
+	if data[i_obs, "T [°C]"] < 10.0
+		error("prior makes no sense")
+	end
+    # σ ~ Normal(σ_prior.μ, 20 * σ_prior.σ^2) # °C
+	σ ~ Uniform(0, 0.5)
+	τ ~ Normal(τ_prior.μ, τ_prior.σ^2)
 
     # Observation
 	tᵢ = data[i_obs, "t [min]"]
@@ -161,7 +216,7 @@ fixed_params2 = (T₀=load("nice_data_run_$other_run.jld2")["T₀"],
 end
 
 # ╔═╡ 62c5e645-285d-470e-b46b-00f0471b7329
-i_obs = 40
+i_obs = 20
 
 # ╔═╡ efdf4047-81ab-45db-9980-267df2bad314
 model_T₀ = identify_T₀(data2, i_obs, fixed_params2.Tₐ)
@@ -205,11 +260,11 @@ function viz_fit_T₀(data::DataFrame, i_obs::Int, Tₐ::Float64, chain::Chains)
 	)
 	hlines!(ax, Tₐ, style=:dash, linestyle=:dot, label="Tₐ", color=Cycled(3))
 	scatter!(data[:, "t [min]"], data[:, "T [°C]"], 
-		label="{(tᵢ, Tᵢ)} (unobs)", strokewidth=1, color=(:white, 0.0))
+		label="{(tᵢ, Tᵢ)} (unobserved)", strokewidth=1, color=(:white, 0.0))
 	lines!(t, T_model.(t, τ.μ, T₀.μ, Tₐ),
-        label="model", color=my_colors[6])
+        label="model", color=my_colors[2])
 	band!(t, T_model.(t, τ.μ, T₀.lb, Tₐ), T_model.(t, τ.μ, T₀.ub, Tₐ), 
-		color=(my_colors[6], 0.25))
+		color=(my_colors[2], 0.25))
 	# if ! isnothing(chains)
 	# 	posterior_samples = DataFrame(sample(chain_T₀[[:τ, :T₀]], 100; replace=false))
 	# 	for row in eachrow(posterior_samples)
@@ -218,7 +273,7 @@ function viz_fit_T₀(data::DataFrame, i_obs::Int, Tₐ::Float64, chain::Chains)
 	# 	end
 	# end
 	scatter!([data[i_obs, "t [min]"]], [data[i_obs, "T [°C]"]], 
-		label="(tₖ, Tₖ) (obs)", strokewidth=1)
+		label="(tₖ, Tₖ) (observed)", strokewidth=1)
 	axislegend(position=:rb)
 	xlims!(-0.03*max_t, 1.03*max_t)
 	fig
@@ -226,6 +281,43 @@ end
 
 # ╔═╡ 007ae23e-7572-4075-859b-451b379be0e6
 viz_fit_T₀(data2, i_obs, fixed_params2.Tₐ, chain_T₀)
+
+# ╔═╡ db258674-540b-4f89-b782-46dcd8865bf2
+begin
+	function inverse_problem_toy_viz(data, fixed_params, τ, δ, i_obs; show_soln=true)
+		t = range(0.0, 550.0, length=100)
+
+		tₖ = data[i_obs, "t [min]"]
+		Tₖ = data[i_obs, "T [°C]"]
+		
+		fig = Figure()
+		ax  = Axis(fig[1, 1], xlabel="time, t [min]", ylabel="temperature, T(t) [°C]")
+		plot_Tₐ!(ax, fixed_params.Tₐ)
+		if show_soln
+			T₀ = T₀_model_iv(tₖ, Tₖ, τ, fixed_params.Tₐ)
+			T₀⁺ = T₀_model_iv(tₖ, Tₖ + δ, τ, fixed_params.Tₐ)
+			T₀⁻ = T₀_model_iv(tₖ, Tₖ - δ, τ, fixed_params.Tₐ)
+			lines!(t, T_model.(t, τ, T₀, fixed_params.Tₐ),
+				label="model", color=my_colors[2])
+			band!(t, T_model.(t, τ, T₀⁻, fixed_params.Tₐ),
+					 T_model.(t, τ, T₀⁺, fixed_params.Tₐ),
+					 color=(my_colors[2], 0.4)
+			)
+			scatter!(0, T₀, marker=:rect,
+			     label="(t₀, T₀)", strokewidth=1, color=my_colors[1])
+		end
+
+		errorbars!([tₖ], [Tₖ], δ, δ, 
+				   whiskerwidth=10, linewidth=3, color=:black)
+		scatter!(tₖ, Tₖ, 
+			     label="(tₖ, Tₖ)", strokewidth=1)
+		axislegend(position=:rb)
+		toy_lims!(ax)
+		fig
+	end
+
+	inverse_problem_toy_viz(data2, fixed_params2, τ̄, 0.5, i_obs; show_soln=true)
+end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -1769,11 +1861,14 @@ version = "3.5.0+0"
 # ╠═43bcf4b0-fbfc-11ec-0e23-bb05c02078c9
 # ╠═a081eb2c-ff46-4efa-a6cd-ee3e9209e14e
 # ╠═7f7f3c12-343c-4e19-8371-a065bb9051cb
+# ╠═a13ba151-99c1-47ae-b96e-dc90464990b6
+# ╠═0176e392-7134-4404-94bc-0b87083fff55
+# ╠═5f462877-80cb-4ca9-ad7d-29b4b0acb07e
+# ╠═3885aa90-483b-439e-a7cb-34aadf1bc329
 # ╟─b29797b9-7e2f-4d55-bc39-dba5ad7663de
 # ╠═269ac9fa-13f3-443a-8669-e8f13d3518a6
 # ╠═d32079ef-7ebd-4645-9789-1d258b13b66f
 # ╠═b8a3fc88-6e4d-457d-8582-f6302fb206ac
-# ╠═a13ba151-99c1-47ae-b96e-dc90464990b6
 # ╠═ecd4ea3f-1775-4c4e-a679-f8e15eaad3f7
 # ╠═2e57666d-b3f4-451e-86fd-781217c1258d
 # ╠═bb3ae6a9-5d87-4b90-978e-8674f6c5bd99
@@ -1783,6 +1878,9 @@ version = "3.5.0+0"
 # ╠═294e240f-c146-4ef3-b172-26e70ad3ed19
 # ╠═6c797a4b-f692-4312-b434-a662f5c41343
 # ╠═38bf810d-b588-426c-81e7-a036ea7083f3
+# ╟─02bef073-47ae-4b55-9420-d351220018ae
+# ╠═42690c6c-af94-4051-8472-fc7fab9d1d82
+# ╠═0a5daf81-8840-47d6-bda2-ebf0109f35ed
 # ╟─d8e026b9-8943-437e-a08b-2395de35d705
 # ╠═7df25291-a600-449e-a194-3ec7c3f11361
 # ╠═8f145533-7208-4c25-9b1e-84370c7ac7ca
@@ -1798,5 +1896,6 @@ version = "3.5.0+0"
 # ╠═d959317b-3f19-495e-95ac-50a8fecd659f
 # ╠═d592943d-2402-4857-9509-4ae74dee26c4
 # ╠═007ae23e-7572-4075-859b-451b379be0e6
+# ╠═db258674-540b-4f89-b782-46dcd8865bf2
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
