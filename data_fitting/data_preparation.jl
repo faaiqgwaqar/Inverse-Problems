@@ -33,7 +33,7 @@ function read_data(filename::String)
 end
 
 # ╔═╡ 3c2e28af-1506-4ca6-be48-4e38bd67097d
-run = 12
+run = 11
 
 # ╔═╡ 60a97118-1fc1-403b-97fa-fce162e8d6fd
 filename = "limev$run.csv"
@@ -69,21 +69,24 @@ data
 md"## viz the data"
 
 # ╔═╡ f68fcc2b-7f79-4896-83a7-f0141e8bf02d
-function viz_data(data::DataFrame, Tₐ::Float64)
+function viz_data(data::DataFrame, Tₐ::Float64; shld_i_save::Bool=false)
 	max_t = maximum(data[:, "t [min]"])
 	
 	fig = Figure()
 	ax  = Axis(fig[1, 1], 
 		       xlabel="time, t [min]",
-		       ylabel="temperature [°C]",
+		       ylabel="temperature, θ [°C]",
                xtickalign=1, ytickalign=1
 	)
-	hlines!(ax, Tₐ, style=:dash, linestyle=:dot, label="Tₐ", color=Cycled(3))
+	vlines!(ax, [0.0], color="gray", linewidth=1)
+	hlines!(ax, Tₐ, style=:dash, linestyle=:dot, label="θᵃⁱʳ", color=Cycled(3))
 	scatter!(data[:, "t [min]"], data[:, "T [°C]"], 
-		label="{(tᵢ, Tᵢ)}", strokewidth=1)
+		label="{(tᵢ, θᵢ)}", strokewidth=1)
 	axislegend(position=:rb)
 	xlims!(-0.03*max_t, 1.03*max_t)
-	# xlims!(0, 10)
+	if shld_i_save
+		save("raw_data_run_$run.pdf")
+	end
 	fig
 end
 
@@ -108,14 +111,13 @@ function downsample(data::DataFrame, n::Int, T₀::Float64, Tₐ::Float64)
 		sort(sample(i_eq+1:nrow(data), n-1, replace=false)), 
 	)
 	return data[id_sample, :]
-	# deleteat!(data, [i for i = 1:nrow(data) if ! (i in id_sample)])
 end
 
 # ╔═╡ e35322f8-5065-43ef-a846-77de00f4d065
 downsampled_data = downsample(data, n, T₀, Tₐ)
 
 # ╔═╡ 9c6d23d9-fcc2-4704-86c5-50a13d6af2e0
-viz_data(downsampled_data, Tₐ)
+viz_data(downsampled_data, Tₐ, shld_i_save=true)
 
 # ╔═╡ a5535284-1d62-4748-b9c8-c28fa2dc3eb3
 md"## export data for other tasks"
