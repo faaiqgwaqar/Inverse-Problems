@@ -1,21 +1,25 @@
 ### A Pluto.jl notebook ###
-# v0.19.9
+# v0.19.11
 
 using Markdown
 using InteractiveUtils
 
 # ╔═╡ 38925e1a-817b-4575-9768-02fb68bec2d6
-using CairoMakie, ColorSchemes, CSV, DataFrames, StatsBase, JLD2
+using CairoMakie, ColorSchemes, CSV, DataFrames, StatsBase, JLD2, PlutoUI, Colors
 
-# ╔═╡ c2f4d731-8ba6-4f2c-9006-2f8adc9235dc
-update_theme!(
-	fontsize=20, 
-	linewidth=4, 
-	Axis=(; xgridstyle=:dash, ygridstyle=:dash, xtickalign=1, ytickalign=1),
-	resolution=(500, 380),
-	palette = (color=ColorSchemes.Hokusai3, 
-	           marker=[:circle, :utriangle, :cross, :rect, :diamond, :dtriangle, :pentagon, :xcross])
-)
+# ╔═╡ 637f2cf6-0cb0-4ea2-b1c5-6caccf46c06d
+begin
+	include("dope_makie_theme.jl")
+	set_theme!(dope_theme)
+end
+
+# ╔═╡ bc2cd3cb-c982-4f4e-a74c-5119a6851b04
+TableOfContents()
+
+# ╔═╡ 6a246c23-9d0b-4ed9-85ab-18ac16e6de88
+md"## read raw data
+the good runs, where $t=0$ corresponds to taking lime out of fridge, are runs 11 and 12.
+"
 
 # ╔═╡ cc51a112-7d01-46d0-86b0-85e142a6b7ca
 function read_data(filename::String)
@@ -29,43 +33,31 @@ function read_data(filename::String)
 end
 
 # ╔═╡ 3c2e28af-1506-4ca6-be48-4e38bd67097d
-run = 2
+run = 12
 
 # ╔═╡ 60a97118-1fc1-403b-97fa-fce162e8d6fd
 filename = "limev$run.csv"
 
+# ╔═╡ dba3e7ce-cf99-4ad7-b1fe-560aea998273
+data = read_data(filename)
+
+# ╔═╡ c2e1bf81-e416-4b93-9d83-84129f9c6001
+md"## initial temperature"
+
+# ╔═╡ dd37ff0f-fc4f-4076-9da5-f7735ac3d829
+T₀ = data[1, "T [°C]"]
+
+# ╔═╡ d0920710-db3f-4b23-8879-3aac8a45a5dd
+md"## compute air temperature
+assume air temperature is given as average temperature recorded over last ΔT min.
+"
+
 # ╔═╡ 28d92414-f199-433b-9d3e-e16e5e4b6aa8
-"""
-assume air temperature is given as average temperature recorded over last 2 min.
-"""
-function compute_Tₐ(data::DataFrame)
-	ΔT = 2.0 # min
+function compute_Tₐ(data::DataFrame; ΔT=200.0)
 	t_end = data[end, "t [min]"]
 	data_end = filter(row -> row["t [min]"] > t_end - ΔT, data)
 	return mean(data_end[:, "T [°C]"])
 end
-
-# ╔═╡ b4914849-aa69-4523-9acf-9ecde0ee5ee3
-function time_shift!(data::DataFrame, t₀::Float64)
-	filter!(row -> row["t [min]"] > t₀, data)
-	data[:, "t [min]"] = data[:, "t [min]"] .- data[1, "t [min]"]
-end
-
-# ╔═╡ ee150e92-5c2c-4bf1-b97d-e14c5f642839
-begin
-	data = read_data(filename)
-	if filename == "limev1.csv"
-		time_shift!(data, 5.0)
-		# air gets hotter at end.
-		filter!(row -> row["t [min]"] < 500.0, data)
-	elseif filename == "limev2.csv"
-		time_shift!(data, 5.0)
-	end
-	data
-end
-
-# ╔═╡ 514638ff-0ffe-408a-a5df-c6a7399bceb2
-mean([data[i+1, "t [min]"] - data[i, "t [min]"]  for i = 1:nrow(data)-1])
 
 # ╔═╡ 6ad47dbb-6513-4f18-9f44-cc82b26555b5
 Tₐ = compute_Tₐ(data)
@@ -73,14 +65,8 @@ Tₐ = compute_Tₐ(data)
 # ╔═╡ 0e5b8843-e07a-4efb-b758-8ec75503881f
 data
 
-# ╔═╡ f950ade9-1a1a-4398-a954-635d03599afa
-function downsample!(data::DataFrame, n::Int)
-	id_sample = vcat([1], sort(sample(2:nrow(data), n-1, replace=false)))
-	deleteat!(data, [i for i = 1:nrow(data) if ! (i in id_sample)])
-end
-
-# ╔═╡ e35322f8-5065-43ef-a846-77de00f4d065
-downsample!(data, 100)
+# ╔═╡ 33bdddea-6f17-4ea9-b074-d7d9bebc4321
+md"## viz the data"
 
 # ╔═╡ f68fcc2b-7f79-4896-83a7-f0141e8bf02d
 function viz_data(data::DataFrame, Tₐ::Float64)
@@ -101,17 +87,41 @@ function viz_data(data::DataFrame, Tₐ::Float64)
 	fig
 end
 
-# ╔═╡ 9c6d23d9-fcc2-4704-86c5-50a13d6af2e0
+# ╔═╡ 5d3acc22-3a32-4ff6-9a25-cd9a7594a34a
 viz_data(data, Tₐ)
 
-# ╔═╡ 710112f1-e54a-4e1e-8f5e-ad79a76149f4
-data
+# ╔═╡ f07ab15c-fe20-4138-a28e-6eca0f774ef5
+md"## downsample
+choose $n$ before and after equilibrium points at random. (but include the first).
+equilibrium = 95% of way to air temp.
+"
 
-# ╔═╡ dd37ff0f-fc4f-4076-9da5-f7735ac3d829
-T₀ = data[1, "T [°C]"]
+# ╔═╡ 8c76392f-b85e-4585-942c-4da13babedec
+n = 25
+
+# ╔═╡ f950ade9-1a1a-4398-a954-635d03599afa
+function downsample(data::DataFrame, n::Int, T₀::Float64, Tₐ::Float64)
+	i_eq = findfirst(data[:, "T [°C]"] .> T₀ + (Tₐ - T₀) * 0.95)
+	
+	id_sample = vcat([1], 
+		sort(sample(2:i_eq, n, replace=false)),
+		sort(sample(i_eq+1:nrow(data), n-1, replace=false)), 
+	)
+	return data[id_sample, :]
+	# deleteat!(data, [i for i = 1:nrow(data) if ! (i in id_sample)])
+end
+
+# ╔═╡ e35322f8-5065-43ef-a846-77de00f4d065
+downsampled_data = downsample(data, n, T₀, Tₐ)
+
+# ╔═╡ 9c6d23d9-fcc2-4704-86c5-50a13d6af2e0
+viz_data(downsampled_data, Tₐ)
+
+# ╔═╡ a5535284-1d62-4748-b9c8-c28fa2dc3eb3
+md"## export data for other tasks"
 
 # ╔═╡ 322c60c0-1e04-4bd8-a3f9-2802e8deb605
-jldsave("nice_data_run_$run.jld2"; data, T₀, Tₐ)
+jldsave("nice_data_run_$run.jld2"; data=downsampled_data, T₀=T₀, Tₐ=Tₐ)
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -119,16 +129,20 @@ PLUTO_PROJECT_TOML_CONTENTS = """
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 ColorSchemes = "35d6a980-a343-548e-a6ea-1d62b119f2f4"
+Colors = "5ae59095-9a9b-59fe-a467-6f913c188581"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
+PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
 [compat]
 CSV = "~0.10.4"
 CairoMakie = "~0.8.8"
 ColorSchemes = "~3.19.0"
+Colors = "~0.12.8"
 DataFrames = "~1.3.4"
 JLD2 = "~0.4.22"
+PlutoUI = "~0.7.40"
 StatsBase = "~0.33.18"
 """
 
@@ -136,14 +150,21 @@ StatsBase = "~0.33.18"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.7.3"
+julia_version = "1.8.0"
 manifest_format = "2.0"
+project_hash = "64211a914794597fddb0516baa141282833f2c52"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra"]
 git-tree-sha1 = "69f7020bd72f069c219b5e8c236c1fa90d2cb409"
 uuid = "621f4979-c628-5d54-868e-fcf4e3e8185c"
 version = "1.2.1"
+
+[[deps.AbstractPlutoDingetjes]]
+deps = ["Pkg"]
+git-tree-sha1 = "8eaf9f1b4921132a4cff3f36a1d9ba923b14a481"
+uuid = "6e696c72-6542-2067-7265-42206c756150"
+version = "1.1.4"
 
 [[deps.AbstractTrees]]
 git-tree-sha1 = "5c0b629df8a5566a06f5fef5100b53ea56e465a0"
@@ -164,6 +185,7 @@ version = "0.4.1"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
+version = "1.1.1"
 
 [[deps.Artifacts]]
 uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
@@ -281,6 +303,7 @@ version = "3.45.0"
 [[deps.CompilerSupportLibraries_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
+version = "0.5.2+0"
 
 [[deps.Contour]]
 deps = ["StaticArrays"]
@@ -348,6 +371,7 @@ version = "0.8.6"
 [[deps.Downloads]]
 deps = ["ArgTools", "FileWatching", "LibCURL", "NetworkOptions"]
 uuid = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
+version = "1.6.0"
 
 [[deps.DualNumbers]]
 deps = ["Calculus", "NaNMath", "SpecialFunctions"]
@@ -511,6 +535,24 @@ git-tree-sha1 = "cb7099a0109939f16a4d3b572ba8396b1f6c7c31"
 uuid = "34004b35-14d8-5ef3-9330-4cdb6864b03a"
 version = "0.3.10"
 
+[[deps.Hyperscript]]
+deps = ["Test"]
+git-tree-sha1 = "8d511d5b81240fc8e6802386302675bdf47737b9"
+uuid = "47d2ed2b-36de-50cf-bf87-49c2cf4b8b91"
+version = "0.0.4"
+
+[[deps.HypertextLiteral]]
+deps = ["Tricks"]
+git-tree-sha1 = "c47c5fa4c5308f27ccaac35504858d8914e102f9"
+uuid = "ac1192a8-f4b3-4bfe-ba22-af5b92cd3ab2"
+version = "0.9.4"
+
+[[deps.IOCapture]]
+deps = ["Logging", "Random"]
+git-tree-sha1 = "f7be53659ab06ddc986428d3a9dcc95f6fa6705a"
+uuid = "b5f81e59-6552-4d32-b1f0-c071b021bf89"
+version = "0.2.2"
+
 [[deps.ImageCore]]
 deps = ["AbstractFFTs", "ColorVectorSpace", "Colors", "FixedPointNumbers", "Graphics", "MappedArrays", "MosaicViews", "OffsetArrays", "PaddedViews", "Reexport"]
 git-tree-sha1 = "acf614720ef026d38400b3817614c45882d75500"
@@ -664,10 +706,12 @@ version = "0.3.1"
 [[deps.LibCURL]]
 deps = ["LibCURL_jll", "MozillaCACerts_jll"]
 uuid = "b27032c2-a3e7-50c8-80cd-2d36dbcbfd21"
+version = "0.6.3"
 
 [[deps.LibCURL_jll]]
 deps = ["Artifacts", "LibSSH2_jll", "Libdl", "MbedTLS_jll", "Zlib_jll", "nghttp2_jll"]
 uuid = "deac9b47-8bc7-5906-a0fe-35ac56dc84c0"
+version = "7.84.0+0"
 
 [[deps.LibGit2]]
 deps = ["Base64", "NetworkOptions", "Printf", "SHA"]
@@ -676,6 +720,7 @@ uuid = "76f85450-5226-5b5a-8eaa-529ad045b433"
 [[deps.LibSSH2_jll]]
 deps = ["Artifacts", "Libdl", "MbedTLS_jll"]
 uuid = "29816b5a-b9ab-546f-933c-edad1886dfa8"
+version = "1.10.2+0"
 
 [[deps.Libdl]]
 uuid = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
@@ -776,6 +821,7 @@ version = "0.4.3"
 [[deps.MbedTLS_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "c8ffd9c3-330d-5841-b78e-0817d7145fa1"
+version = "2.28.0+0"
 
 [[deps.Missings]]
 deps = ["DataAPI"]
@@ -794,6 +840,7 @@ version = "0.3.3"
 
 [[deps.MozillaCACerts_jll]]
 uuid = "14a3606d-f60d-562e-9121-12d972cd8159"
+version = "2022.2.1"
 
 [[deps.NaNMath]]
 git-tree-sha1 = "737a5957f387b17e74d4ad2f440eb330b39a62c5"
@@ -808,6 +855,7 @@ version = "1.0.2"
 
 [[deps.NetworkOptions]]
 uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
+version = "1.2.0"
 
 [[deps.Observables]]
 git-tree-sha1 = "dfd8d34871bc3ad08cd16026c1828e271d554db9"
@@ -829,6 +877,7 @@ version = "1.3.5+1"
 [[deps.OpenBLAS_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
 uuid = "4536629a-c528-5b80-bd46-f80d51c5b363"
+version = "0.3.20+0"
 
 [[deps.OpenEXR]]
 deps = ["Colors", "FileIO", "OpenEXR_jll"]
@@ -845,6 +894,7 @@ version = "3.1.1+0"
 [[deps.OpenLibm_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "05823500-19ac-5b8b-9628-191a04bc5112"
+version = "0.8.1+0"
 
 [[deps.OpenSSL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -920,6 +970,7 @@ version = "0.40.1+0"
 [[deps.Pkg]]
 deps = ["Artifacts", "Dates", "Downloads", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "REPL", "Random", "SHA", "Serialization", "TOML", "Tar", "UUIDs", "p7zip_jll"]
 uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
+version = "1.8.0"
 
 [[deps.PkgVersion]]
 deps = ["Pkg"]
@@ -932,6 +983,12 @@ deps = ["ColorSchemes", "Colors", "Dates", "Printf", "Random", "Reexport", "Stat
 git-tree-sha1 = "9888e59493658e476d3073f1ce24348bdc086660"
 uuid = "995b91a9-d308-5afd-9ec6-746e21dbc043"
 version = "1.3.0"
+
+[[deps.PlutoUI]]
+deps = ["AbstractPlutoDingetjes", "Base64", "ColorTypes", "Dates", "Hyperscript", "HypertextLiteral", "IOCapture", "InteractiveUtils", "JSON", "Logging", "Markdown", "Random", "Reexport", "UUIDs"]
+git-tree-sha1 = "a602d7b0babfca89005da04d89223b867b55319f"
+uuid = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
+version = "0.7.40"
 
 [[deps.PolygonOps]]
 git-tree-sha1 = "77b3d3605fc1cd0b42d95eba87dfcd2bf67d5ff6"
@@ -1023,6 +1080,7 @@ version = "0.3.0+0"
 
 [[deps.SHA]]
 uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
+version = "0.7.0"
 
 [[deps.SIMD]]
 git-tree-sha1 = "7dbc15af7ed5f751a82bf3ed37757adf76c32402"
@@ -1143,6 +1201,7 @@ uuid = "4607b0f0-06f3-5cda-b6b1-a6196a1729e9"
 [[deps.TOML]]
 deps = ["Dates"]
 uuid = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
+version = "1.0.0"
 
 [[deps.TableTraits]]
 deps = ["IteratorInterfaceExtensions"]
@@ -1159,6 +1218,7 @@ version = "1.7.0"
 [[deps.Tar]]
 deps = ["ArgTools", "SHA"]
 uuid = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
+version = "1.10.0"
 
 [[deps.TensorCore]]
 deps = ["LinearAlgebra"]
@@ -1181,6 +1241,11 @@ deps = ["Random", "Test"]
 git-tree-sha1 = "216b95ea110b5972db65aa90f88d8d89dcb8851c"
 uuid = "3bb67fe8-82b1-5028-8e26-92a6c54297fa"
 version = "0.9.6"
+
+[[deps.Tricks]]
+git-tree-sha1 = "6bac775f2d42a611cdfcd1fb217ee719630c4175"
+uuid = "410a4b4d-49e4-4fbc-ab6d-cb71b17b3775"
+version = "0.1.6"
 
 [[deps.UUIDs]]
 deps = ["Random", "SHA"]
@@ -1270,6 +1335,7 @@ version = "1.4.0+3"
 [[deps.Zlib_jll]]
 deps = ["Libdl"]
 uuid = "83775a58-1f1d-513f-b197-d71354ab007a"
+version = "1.2.12+3"
 
 [[deps.isoband_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1286,6 +1352,7 @@ version = "0.15.1+0"
 [[deps.libblastrampoline_jll]]
 deps = ["Artifacts", "Libdl", "OpenBLAS_jll"]
 uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
+version = "5.1.1+0"
 
 [[deps.libfdk_aac_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1314,10 +1381,12 @@ version = "1.3.7+1"
 [[deps.nghttp2_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "8e850ede-7688-5339-a07c-302acd2aaf8d"
+version = "1.48.0+0"
 
 [[deps.p7zip_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
+version = "17.4.0+0"
 
 [[deps.x264_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1334,22 +1403,28 @@ version = "3.5.0+0"
 
 # ╔═╡ Cell order:
 # ╠═38925e1a-817b-4575-9768-02fb68bec2d6
-# ╠═c2f4d731-8ba6-4f2c-9006-2f8adc9235dc
+# ╠═bc2cd3cb-c982-4f4e-a74c-5119a6851b04
+# ╠═637f2cf6-0cb0-4ea2-b1c5-6caccf46c06d
+# ╟─6a246c23-9d0b-4ed9-85ab-18ac16e6de88
 # ╠═cc51a112-7d01-46d0-86b0-85e142a6b7ca
 # ╠═3c2e28af-1506-4ca6-be48-4e38bd67097d
 # ╠═60a97118-1fc1-403b-97fa-fce162e8d6fd
+# ╠═dba3e7ce-cf99-4ad7-b1fe-560aea998273
+# ╟─c2e1bf81-e416-4b93-9d83-84129f9c6001
+# ╠═dd37ff0f-fc4f-4076-9da5-f7735ac3d829
+# ╟─d0920710-db3f-4b23-8879-3aac8a45a5dd
 # ╠═28d92414-f199-433b-9d3e-e16e5e4b6aa8
-# ╠═b4914849-aa69-4523-9acf-9ecde0ee5ee3
-# ╠═ee150e92-5c2c-4bf1-b97d-e14c5f642839
-# ╠═514638ff-0ffe-408a-a5df-c6a7399bceb2
 # ╠═6ad47dbb-6513-4f18-9f44-cc82b26555b5
 # ╠═0e5b8843-e07a-4efb-b758-8ec75503881f
+# ╟─33bdddea-6f17-4ea9-b074-d7d9bebc4321
+# ╠═f68fcc2b-7f79-4896-83a7-f0141e8bf02d
+# ╠═5d3acc22-3a32-4ff6-9a25-cd9a7594a34a
+# ╟─f07ab15c-fe20-4138-a28e-6eca0f774ef5
+# ╠═8c76392f-b85e-4585-942c-4da13babedec
 # ╠═f950ade9-1a1a-4398-a954-635d03599afa
 # ╠═e35322f8-5065-43ef-a846-77de00f4d065
-# ╠═f68fcc2b-7f79-4896-83a7-f0141e8bf02d
 # ╠═9c6d23d9-fcc2-4704-86c5-50a13d6af2e0
-# ╠═710112f1-e54a-4e1e-8f5e-ad79a76149f4
-# ╠═dd37ff0f-fc4f-4076-9da5-f7735ac3d829
+# ╟─a5535284-1d62-4748-b9c8-c28fa2dc3eb3
 # ╠═322c60c0-1e04-4bd8-a3f9-2802e8deb605
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
