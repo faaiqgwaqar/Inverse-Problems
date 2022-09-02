@@ -1,17 +1,26 @@
 ### A Pluto.jl notebook ###
-# v0.19.9
+# v0.19.11
 
 using Markdown
 using InteractiveUtils
 
 # ╔═╡ a9ad09a2-81f6-11ec-2768-87de554ed581
-using CairoMakie, Optim, CSV, DataFrames, StatsBase, JLD2
+using CairoMakie, Optim, CSV, DataFrames, StatsBase, JLD2, PlutoUI, ColorSchemes, Colors
 
-# ╔═╡ c2f4d731-8ba6-4f2c-9006-2f8adc9235dc
-update_theme!(fontsize=20, linewidth=4)
+# ╔═╡ 5d0e6da2-c577-453d-9c2e-018e8fb8d4bf
+begin
+	include("dope_makie_theme.jl")
+	set_theme!(dope_theme)
+end
+
+# ╔═╡ ee83c77d-ca86-4611-bfee-451fc670765c
+TableOfContents()
+
+# ╔═╡ c93797a8-c2c2-4035-9f5c-5f0f5e22a87f
+md"## read prepared data"
 
 # ╔═╡ 7113d877-34b9-46e8-8416-423c9058fbfe
-run = 1
+run = 11
 
 # ╔═╡ 95d5eb21-f4d0-477d-b44f-bb803cb0eac4
 data = load("nice_data_run_$run.jld2")["data"]
@@ -22,6 +31,9 @@ Tₐ = load("nice_data_run_$run.jld2")["Tₐ"]
 # ╔═╡ 705303c7-81d7-4966-9717-572fb72044fc
 T₀ = load("nice_data_run_$run.jld2")["T₀"]
 
+# ╔═╡ 100ea480-50d2-4996-8068-c203be1d9319
+md"## the mathematical model"
+
 # ╔═╡ 67d76287-592c-498a-8f14-a0589dae84c5
 function T_model(t::Float64, τ::Float64, T₀::Float64, Tₐ::Float64)
     if t < 0.0
@@ -29,6 +41,9 @@ function T_model(t::Float64, τ::Float64, T₀::Float64, Tₐ::Float64)
 	end
     return Tₐ .+ (T₀ - Tₐ) * exp(-t / τ)
 end
+
+# ╔═╡ 61b37110-866c-4117-b9b4-acf388e176ff
+md"## the cost function"
 
 # ╔═╡ 51f47395-da6c-484e-a313-0da2b2b916d9
 function cost(τ)
@@ -39,8 +54,29 @@ function cost(τ)
 		
         ℓ += (Tᵢ - T_model(tᵢ, τ, T₀, Tₐ)) ^ 2
     end
-    return ℓ
+    return ℓ / nrow(data)
 end
+
+# ╔═╡ 591cfced-dd71-4cd4-85cc-0fdf5bb2594e
+function viz_loss(;τ_opt::Union{Float64, Nothing}=nothing)
+	τs = range(0.0, 203.0, length=100)
+	fig = Figure()
+	ax  = Axis(fig[1, 1], 
+			   xlabel="time constant, τ [min]", 
+			   ylabel="loss, ℓ(τ) [(°C)²]")
+	lines!(τs, cost.(τs))
+	xlims!(0.0, 202.0)
+	if ! isnothing(τ_opt)
+		vlines!(ax, τ_opt, linestyle=:dash, linewidth=1, color=Cycled(2))
+	end
+	fig
+end
+
+# ╔═╡ c381a1c6-66b5-4ec5-b5c2-f1f1c586bbae
+viz_loss()
+
+# ╔═╡ f3439538-2249-466e-9830-e11d0516009a
+md"## minimize cost!"
 
 # ╔═╡ ea783d58-f6ea-49ba-8c19-df301b9a4294
 opt_res = optimize(cost, 0.0, 200.0)
@@ -48,21 +84,11 @@ opt_res = optimize(cost, 0.0, 200.0)
 # ╔═╡ cb17b065-6f1b-45ca-b529-eaf61aef9404
 τ_opt = opt_res.minimizer
 
-# ╔═╡ 591cfced-dd71-4cd4-85cc-0fdf5bb2594e
-function viz_loss(τ_opt)
-	τs = range(0.0, 200.0, length=100)
-	fig = Figure()
-	ax  = Axis(fig[1, 1], 
-			   xlabel="time constant, τ [min]", 
-			   ylabel="loss, ℓ(τ) [(°C)²]")
-	lines!(τs, cost.(τs))
-	xlims!(0.0, 200.0)
-	vlines!(ax, τ_opt, style=:dash, color=:gray)
-	fig
-end
-
 # ╔═╡ ca41cf71-1d6e-4374-bb23-3297f3dc1abb
-viz_loss(τ_opt)
+viz_loss(τ_opt=τ_opt)
+
+# ╔═╡ 52c397db-4f96-4bf7-806c-c7b3415624d3
+md"## viz the fit"
 
 # ╔═╡ 062f53a9-ef55-4ce4-9521-9e183af1d07c
 function viz_fit(data::DataFrame, Tₐ::Float64, T₀::Float64, τ_opt::Float64)
@@ -71,14 +97,18 @@ function viz_fit(data::DataFrame, Tₐ::Float64, T₀::Float64, τ_opt::Float64)
 	fig = Figure()
 	ax  = Axis(fig[1, 1], 
 		       xlabel="time, t [min]",
-		       ylabel="temperature, T(t) [°C]",
+		       ylabel="temperature [°C]",
 		       xgridstyle=:dash, ygridstyle = :dash,
                xtickalign=1, ytickalign=1
 	)
-	scatter!(data[:, "t [min]"], data[:, "T [°C]"], label="data")
 	lines!(t, T_model.(t, τ_opt, T₀, Tₐ), 
-		label="model", color="red", linestyle=:dash)
-	hlines!(ax, Tₐ, style=:dash, color=:gray, linestyle=:dash)
+		label="model, θ(t; τ̂, θᵃⁱʳ)", color=Cycled(2))
+	scatter!(data[:, "t [min]"], data[:, "T [°C]"], 
+		label="data, {(tᵢ, θᵢ)}", strokewidth=1)
+
+	vlines!(ax, [0.0], color="gray", linewidth=1)
+
+	# hlines!(ax, Tₐ, style=:dash, color=:gray, linestyle=:dash)
 	axislegend(position=:rb)
 	fig
 end
@@ -86,8 +116,11 @@ end
 # ╔═╡ 74159a75-1978-4417-a6d4-72a8b99cca66
 viz_fit(data, Tₐ, T₀, τ_opt)
 
+# ╔═╡ 62f02a89-85eb-4102-ac5c-3af16692f4cb
+md"## does τ̂ fit the test run?"
+
 # ╔═╡ 244cd52e-f409-41ec-9f34-9c03f5cac974
-other_run = run == 1 ? 2 : 1
+other_run = run == 11 ? 12 : 11
 
 # ╔═╡ cfdd329e-403b-4a7c-8115-1fe9d299bd75
 data_other_run = load("nice_data_run_$other_run.jld2")["data"]
@@ -106,17 +139,23 @@ PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
+ColorSchemes = "35d6a980-a343-548e-a6ea-1d62b119f2f4"
+Colors = "5ae59095-9a9b-59fe-a467-6f913c188581"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
 Optim = "429524aa-4258-5aef-a3af-852621145aeb"
+PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
 [compat]
 CSV = "~0.10.2"
 CairoMakie = "~0.7.2"
+ColorSchemes = "~3.19.0"
+Colors = "~0.12.8"
 DataFrames = "~1.3.2"
 JLD2 = "~0.4.22"
 Optim = "~1.6.0"
+PlutoUI = "~0.7.40"
 StatsBase = "~0.33.16"
 """
 
@@ -124,14 +163,21 @@ StatsBase = "~0.33.16"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.7.3"
+julia_version = "1.8.0"
 manifest_format = "2.0"
+project_hash = "953862b179826517d89610580402ee38839a4acc"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra"]
 git-tree-sha1 = "6f1d9bc1c08f9f4a8fa92e3ea3cb50153a1b40d4"
 uuid = "621f4979-c628-5d54-868e-fcf4e3e8185c"
 version = "1.1.0"
+
+[[deps.AbstractPlutoDingetjes]]
+deps = ["Pkg"]
+git-tree-sha1 = "8eaf9f1b4921132a4cff3f36a1d9ba923b14a481"
+uuid = "6e696c72-6542-2067-7265-42206c756150"
+version = "1.1.4"
 
 [[deps.AbstractTrees]]
 git-tree-sha1 = "03e0550477d86222521d254b741d470ba17ea0b5"
@@ -152,6 +198,7 @@ version = "0.4.1"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
+version = "1.1.1"
 
 [[deps.ArrayInterface]]
 deps = ["ArrayInterfaceCore", "Compat", "IfElse", "LinearAlgebra", "Static"]
@@ -281,6 +328,7 @@ version = "3.45.0"
 [[deps.CompilerSupportLibraries_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
+version = "0.5.2+0"
 
 [[deps.Contour]]
 deps = ["StaticArrays"]
@@ -360,6 +408,7 @@ version = "0.8.6"
 [[deps.Downloads]]
 deps = ["ArgTools", "FileWatching", "LibCURL", "NetworkOptions"]
 uuid = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
+version = "1.6.0"
 
 [[deps.EarCut_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -529,6 +578,24 @@ git-tree-sha1 = "129acf094d168394e80ee1dc4bc06ec835e510a3"
 uuid = "2e76f6c2-a576-52d4-95c1-20adfe4de566"
 version = "2.8.1+1"
 
+[[deps.Hyperscript]]
+deps = ["Test"]
+git-tree-sha1 = "8d511d5b81240fc8e6802386302675bdf47737b9"
+uuid = "47d2ed2b-36de-50cf-bf87-49c2cf4b8b91"
+version = "0.0.4"
+
+[[deps.HypertextLiteral]]
+deps = ["Tricks"]
+git-tree-sha1 = "c47c5fa4c5308f27ccaac35504858d8914e102f9"
+uuid = "ac1192a8-f4b3-4bfe-ba22-af5b92cd3ab2"
+version = "0.9.4"
+
+[[deps.IOCapture]]
+deps = ["Logging", "Random"]
+git-tree-sha1 = "f7be53659ab06ddc986428d3a9dcc95f6fa6705a"
+uuid = "b5f81e59-6552-4d32-b1f0-c071b021bf89"
+version = "0.2.2"
+
 [[deps.IfElse]]
 git-tree-sha1 = "debdd00ffef04665ccbb3e150747a77560e8fad1"
 uuid = "615f187c-cbe4-4ef1-ba3b-2fcf58d6d173"
@@ -687,10 +754,12 @@ version = "0.3.1"
 [[deps.LibCURL]]
 deps = ["LibCURL_jll", "MozillaCACerts_jll"]
 uuid = "b27032c2-a3e7-50c8-80cd-2d36dbcbfd21"
+version = "0.6.3"
 
 [[deps.LibCURL_jll]]
 deps = ["Artifacts", "LibSSH2_jll", "Libdl", "MbedTLS_jll", "Zlib_jll", "nghttp2_jll"]
 uuid = "deac9b47-8bc7-5906-a0fe-35ac56dc84c0"
+version = "7.84.0+0"
 
 [[deps.LibGit2]]
 deps = ["Base64", "NetworkOptions", "Printf", "SHA"]
@@ -699,6 +768,7 @@ uuid = "76f85450-5226-5b5a-8eaa-529ad045b433"
 [[deps.LibSSH2_jll]]
 deps = ["Artifacts", "Libdl", "MbedTLS_jll"]
 uuid = "29816b5a-b9ab-546f-933c-edad1886dfa8"
+version = "1.10.2+0"
 
 [[deps.Libdl]]
 uuid = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
@@ -805,6 +875,7 @@ version = "0.2.1"
 [[deps.MbedTLS_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "c8ffd9c3-330d-5841-b78e-0817d7145fa1"
+version = "2.28.0+0"
 
 [[deps.Missings]]
 deps = ["DataAPI"]
@@ -823,6 +894,7 @@ version = "0.3.3"
 
 [[deps.MozillaCACerts_jll]]
 uuid = "14a3606d-f60d-562e-9121-12d972cd8159"
+version = "2022.2.1"
 
 [[deps.NLSolversBase]]
 deps = ["DiffResults", "Distributed", "FiniteDiff", "ForwardDiff"]
@@ -843,6 +915,7 @@ version = "1.0.2"
 
 [[deps.NetworkOptions]]
 uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
+version = "1.2.0"
 
 [[deps.Observables]]
 git-tree-sha1 = "fe29afdef3d0c4a8286128d4e45cc50621b1e43d"
@@ -864,6 +937,7 @@ version = "1.3.5+1"
 [[deps.OpenBLAS_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
 uuid = "4536629a-c528-5b80-bd46-f80d51c5b363"
+version = "0.3.20+0"
 
 [[deps.OpenEXR]]
 deps = ["Colors", "FileIO", "OpenEXR_jll"]
@@ -880,6 +954,7 @@ version = "3.1.1+0"
 [[deps.OpenLibm_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "05823500-19ac-5b8b-9628-191a04bc5112"
+version = "0.8.1+0"
 
 [[deps.OpenSSL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -967,6 +1042,7 @@ version = "0.40.1+0"
 [[deps.Pkg]]
 deps = ["Artifacts", "Dates", "Downloads", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "REPL", "Random", "SHA", "Serialization", "TOML", "Tar", "UUIDs", "p7zip_jll"]
 uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
+version = "1.8.0"
 
 [[deps.PkgVersion]]
 deps = ["Pkg"]
@@ -979,6 +1055,12 @@ deps = ["ColorSchemes", "Colors", "Dates", "Printf", "Random", "Reexport", "Stat
 git-tree-sha1 = "9888e59493658e476d3073f1ce24348bdc086660"
 uuid = "995b91a9-d308-5afd-9ec6-746e21dbc043"
 version = "1.3.0"
+
+[[deps.PlutoUI]]
+deps = ["AbstractPlutoDingetjes", "Base64", "ColorTypes", "Dates", "Hyperscript", "HypertextLiteral", "IOCapture", "InteractiveUtils", "JSON", "Logging", "Markdown", "Random", "Reexport", "UUIDs"]
+git-tree-sha1 = "a602d7b0babfca89005da04d89223b867b55319f"
+uuid = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
+version = "0.7.40"
 
 [[deps.PolygonOps]]
 git-tree-sha1 = "77b3d3605fc1cd0b42d95eba87dfcd2bf67d5ff6"
@@ -1076,6 +1158,7 @@ version = "0.3.0+0"
 
 [[deps.SHA]]
 uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
+version = "0.7.0"
 
 [[deps.SIMD]]
 git-tree-sha1 = "7dbc15af7ed5f751a82bf3ed37757adf76c32402"
@@ -1202,6 +1285,7 @@ uuid = "4607b0f0-06f3-5cda-b6b1-a6196a1729e9"
 [[deps.TOML]]
 deps = ["Dates"]
 uuid = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
+version = "1.0.0"
 
 [[deps.TableTraits]]
 deps = ["IteratorInterfaceExtensions"]
@@ -1218,6 +1302,7 @@ version = "1.7.0"
 [[deps.Tar]]
 deps = ["ArgTools", "SHA"]
 uuid = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
+version = "1.10.0"
 
 [[deps.TensorCore]]
 deps = ["LinearAlgebra"]
@@ -1240,6 +1325,11 @@ deps = ["Random", "Test"]
 git-tree-sha1 = "216b95ea110b5972db65aa90f88d8d89dcb8851c"
 uuid = "3bb67fe8-82b1-5028-8e26-92a6c54297fa"
 version = "0.9.6"
+
+[[deps.Tricks]]
+git-tree-sha1 = "6bac775f2d42a611cdfcd1fb217ee719630c4175"
+uuid = "410a4b4d-49e4-4fbc-ab6d-cb71b17b3775"
+version = "0.1.6"
 
 [[deps.UUIDs]]
 deps = ["Random", "SHA"]
@@ -1334,6 +1424,7 @@ version = "1.4.0+3"
 [[deps.Zlib_jll]]
 deps = ["Libdl"]
 uuid = "83775a58-1f1d-513f-b197-d71354ab007a"
+version = "1.2.12+3"
 
 [[deps.isoband_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1350,6 +1441,7 @@ version = "0.15.1+0"
 [[deps.libblastrampoline_jll]]
 deps = ["Artifacts", "Libdl", "OpenBLAS_jll"]
 uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
+version = "5.1.1+0"
 
 [[deps.libfdk_aac_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1378,10 +1470,12 @@ version = "1.3.7+1"
 [[deps.nghttp2_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "8e850ede-7688-5339-a07c-302acd2aaf8d"
+version = "1.48.0+0"
 
 [[deps.p7zip_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
+version = "17.4.0+0"
 
 [[deps.x264_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1398,19 +1492,27 @@ version = "3.5.0+0"
 
 # ╔═╡ Cell order:
 # ╠═a9ad09a2-81f6-11ec-2768-87de554ed581
-# ╠═c2f4d731-8ba6-4f2c-9006-2f8adc9235dc
+# ╠═ee83c77d-ca86-4611-bfee-451fc670765c
+# ╠═5d0e6da2-c577-453d-9c2e-018e8fb8d4bf
+# ╟─c93797a8-c2c2-4035-9f5c-5f0f5e22a87f
 # ╠═7113d877-34b9-46e8-8416-423c9058fbfe
 # ╠═95d5eb21-f4d0-477d-b44f-bb803cb0eac4
 # ╠═4cab8fc4-c613-4142-b6b7-3b69c58a8b52
 # ╠═705303c7-81d7-4966-9717-572fb72044fc
+# ╟─100ea480-50d2-4996-8068-c203be1d9319
 # ╠═67d76287-592c-498a-8f14-a0589dae84c5
+# ╟─61b37110-866c-4117-b9b4-acf388e176ff
 # ╠═51f47395-da6c-484e-a313-0da2b2b916d9
+# ╠═591cfced-dd71-4cd4-85cc-0fdf5bb2594e
+# ╠═c381a1c6-66b5-4ec5-b5c2-f1f1c586bbae
+# ╟─f3439538-2249-466e-9830-e11d0516009a
 # ╠═ea783d58-f6ea-49ba-8c19-df301b9a4294
 # ╠═cb17b065-6f1b-45ca-b529-eaf61aef9404
-# ╠═591cfced-dd71-4cd4-85cc-0fdf5bb2594e
 # ╠═ca41cf71-1d6e-4374-bb23-3297f3dc1abb
+# ╟─52c397db-4f96-4bf7-806c-c7b3415624d3
 # ╠═062f53a9-ef55-4ce4-9521-9e183af1d07c
 # ╠═74159a75-1978-4417-a6d4-72a8b99cca66
+# ╟─62f02a89-85eb-4102-ac5c-3af16692f4cb
 # ╠═244cd52e-f409-41ec-9f34-9c03f5cac974
 # ╠═cfdd329e-403b-4a7c-8115-1fe9d299bd75
 # ╠═52917bbb-12c2-4990-ba21-209bb440558d
