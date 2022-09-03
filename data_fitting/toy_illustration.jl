@@ -4,16 +4,6 @@
 using Markdown
 using InteractiveUtils
 
-# This Pluto notebook uses @bind for interactivity. When running this notebook outside of Pluto, the following 'mock version' of @bind gives bound variables a default value (instead of an error).
-macro bind(def, element)
-    quote
-        local iv = try Base.loaded_modules[Base.PkgId(Base.UUID("6e696c72-6542-2067-7265-42206c756150"), "AbstractPlutoDingetjes")].Bonds.initial_value catch; b -> missing; end
-        local el = $(esc(element))
-        global $(esc(def)) = Core.applicable(Base.get, el) ? Base.get(el) : iv(el)
-        el
-    end
-end
-
 # ╔═╡ 94182d54-3428-11ec-3014-d9cedb79f68a
 using Roots, CairoMakie, ColorSchemes, Roots, Optim, Printf, PlutoUI, Random, Colors, JLD2, DataFrames
 
@@ -137,7 +127,7 @@ function viz_forward_problem(savename::String;
 	end
 	
 	scatter!([0.0], [params.T₀], 
-		linestyle=:dash, label="(t₀=0, θ₀)", 
+		linestyle=:dash, label="(t₀, θ₀)", 
 		strokewidth=2, color=colors["data"])
 	xlims!(minimum(t), maximum(t))
 	axislegend(@sprintf("τ = %.1f min", τ), position=:rb)
@@ -198,7 +188,7 @@ function viz_param_id(savename::String; plot_trajectory::Bool=true,
 			axislegend(@sprintf("τ ∈ [%.1f, %.1f] min", τ_ci[1], τ_ci[2]), position=:rb)
 		end
 	else
-		axislegend("τ = ? min", position=:rb)
+		axislegend("τ = ?", position=:rb)
 	end
 	ylims!(the_ylims...)
 	save(savename, fig)
@@ -220,9 +210,6 @@ viz_param_id("id_tau_soln_errors.pdf", plot_trajectory=true, viz_errors=true)
 # ╔═╡ bb2fa8fb-32be-47a2-a659-7c3fa209d068
 md"## time reversal"
 
-# ╔═╡ 485c034f-db48-4c4a-b55b-fe27cd817568
-md"### viz solution"
-
 # ╔═╡ 4e3e686a-02e6-4fc7-89a7-3aebfdb6b351
 function viz_changing_T₀()
 	fig = Figure(resolution = (500, 400))
@@ -238,7 +225,7 @@ function viz_changing_T₀()
 	end
 	Colorbar(fig[1,2], limits=(0, 20), 
 		colormap=my_colormap, label="initial temperature, θ₀ [°C]")
-	text!(@sprintf("τ = %.1f min\nθᵃⁱʳ = %.1f °C", τ, Tₐ), position=(225, 3))
+	text!(@sprintf("τ = %.1f min\nθᵃⁱʳ = %.1f °C\nt₀ = 0 min", τ, Tₐ), position=(225, 3))
 	ylims!(the_ylims...)
 	xlims!(minimum(t), maximum(t))
 	# axislegend(position=:rc)
@@ -250,33 +237,22 @@ end
 viz_changing_T₀()
 
 # ╔═╡ 82b478ac-6156-48ca-8f59-206388e255a7
-function find_T₀(t′, T′, params::NamedTuple)
+function find_T₀(t′, T′, t₀=0.0)
 	function g(T₀)
-		params = (; T₀=T₀, Tₐ=Tₐ, t₀=0.0, τ=τ)
-		return T′ - T(t′, params)
-	end
-	return find_zero(g, (-5, 30), Bisection())
-end
-
-# ╔═╡ 196eb94f-28d1-4e75-8670-8b87e36f0048
-function find_t₀(t′, T′, params::NamedTuple)
-
-	function g(t₀)
 		params = (; T₀=T₀, Tₐ=Tₐ, t₀=t₀, τ=τ)
 		return T′ - T(t′, params)
 	end
 	return find_zero(g, (-5, 30), Bisection())
 end
 
-# ╔═╡ 68719d16-963d-4dab-8e35-e235104e2bc0
-md"t′ = $(@bind t′ PlutoUI.Slider(1.0:1.0:15.0)) 
-viz solution $(@bind viz_soln PlutoUI.CheckBox(false))
-save? $(@bind save_the_fig PlutoUI.CheckBox(false))
-viz errors? $(@bind viz_errors PlutoUI.CheckBox(false))
-"
-
-# ╔═╡ a827a095-2868-43ae-9b04-b6d817318474
-t′
+# ╔═╡ 196eb94f-28d1-4e75-8670-8b87e36f0048
+function find_t₀(t′, T′)
+	function g(t₀)
+		params = (; T₀=T₀, Tₐ=Tₐ, t₀=t₀, τ=τ)
+		return T′ - T(t′, params)
+	end
+	return find_zero(g, (-5, 30), Bisection())
+end
 
 # ╔═╡ 9e0255b0-13d0-4fd5-8aa0-19e04117545d
 function viz_time_reversal(savename::String, t′::Float64; viz_soln::Bool=true, viz_error::Bool=false)
@@ -287,7 +263,7 @@ function viz_time_reversal(savename::String, t′::Float64; viz_soln::Bool=true,
 	t_filtered = filter(x -> x <= t′, t)
 
 	# solution to inverse problem
-	T₀_ci  = [find_T₀(t′, T′ - δ, params), find_T₀(t′, T′ + δ, params)]
+	T₀_ci  = [find_T₀(t′, T′ - δ), find_T₀(t′, T′ + δ)]
 	params_lo = (; T₀=T₀_ci[1], Tₐ=Tₐ, t₀=0.0, τ=τ)
 	params_hi = (; T₀=T₀_ci[2], Tₐ=Tₐ, t₀=0.0, τ=τ)
 	T_lo = T(t_filtered, params_lo)
@@ -324,13 +300,13 @@ function viz_time_reversal(savename::String, t′::Float64; viz_soln::Bool=true,
 	)
 	if viz_soln
 		scatter!([0.0], [T₀], 
-			label="(t₀=0, T₀)", 
+			label="(t₀, T₀)", 
 			strokewidth=2, color=colors["model"])
 	end
 
 	ylims!(the_ylims...)
 	xlims!(minimum(t), maximum(t))
-	axislegend(@sprintf("τ = %.1f min", τ), position=:rb)
+	axislegend(@sprintf("τ = %.1f min\nt₀ = 0 min", τ), position=:rb)
 	save(savename, fig)
 	return fig
 end
@@ -353,35 +329,42 @@ viz_time_reversal("time_reversal_setup_errors_long.pdf", 2*60.0, viz_soln=false,
 # ╔═╡ cdb664e8-cf11-42e5-bd99-bd333f1e5d3a
 viz_time_reversal("time_reversal_soln_errors_long.pdf", 120.0, viz_soln=true, viz_error=true)
 
-# ╔═╡ 1414c1e5-08a0-4475-ad02-f21d8d6b4c05
-begin
-	_t′ = 10.0
-	_T′ = T(_t′, params)
-	_t_filtered = filter(x->x<=_t′, t)
-	ic_params = [Params(t₀, 4.0) for t₀ in 0:2:8]
-	for params in ic_params
-		params.T₀ = find_T₀(_t′, _T′, params)
+# ╔═╡ 95f4a495-b3f5-476a-bccb-9ebe2141dac3
+md"## infinite solutions"
+
+# ╔═╡ d2d0d681-0323-48fb-b521-c6fe4e006357
+function ic_params_list(t′::Float64; n::Int=10, t_start=0.0)
+	params = (; T₀=T₀, Tₐ=Tₐ, t₀=0.0, τ=τ)
+	T′ = T(t′, params)
+
+	t₀s = range(t_start, t′, length=n)[1:end-1]
+	param_list = []
+	for t₀ in t₀s
+		T₀ = find_T₀(t′, T′, t₀)
+		params = (; T₀=T₀, Tₐ=Tₐ, t₀=t₀, τ=τ)
+		push!(param_list, params)
 	end
+	return param_list
 end
 
-# ╔═╡ f5b4d968-e46d-4373-aaba-e274a3261e0a
-md"viz solutions? $(@bind viz_solns PlutoUI.CheckBox(false))"
-
 # ╔═╡ f7a341b1-8d6f-4263-b2a7-73ea0df11722
-begin
-	fig6 = Figure(resolution = (500, 400))
-	ax6  = Axis(fig6[1, 1], 
+function viz_infinite_soln(t′::Float64, savename::String; viz_solns::Bool=false)
+	ic_params = ic_params_list(t′)
+	t_filtered = filter(x -> x <= t′, t)
+	params = (; T₀=T₀, Tₐ=Tₐ, t₀=0.0, τ=τ)
+	T′ = T(t′, params)
+	
+	fig = Figure(resolution = (500, 400))
+	ax  = Axis(fig[1, 1], 
 			   xlabel=the_xlabel, 
 			   ylabel=the_ylabel)
-
-	hlines!(ax6, Tₐ, 
-		linestyle=:dash, label="air temperature, Tₐ", 
-		linewidth=3, color=my_colors[3])
+	draw_axes!(ax)
+	viz_air_temp(ax, Tₐ)
 	if viz_solns
 		for (i, params) in enumerate(ic_params)
-			color = get(ColorSchemes.hawaii, i / length(ic_params))
-			lines!(_t_filtered, T(_t_filtered, params), 
-				   color=color, linestyle=:dot
+			color = get(ColorSchemes.viridis, params.t₀, (0.0, t′))
+			lines!(t_filtered, T(t_filtered, params), 
+				   color=color
 			)
 			scatter!([params.t₀], [params.T₀], 
 				# label= (i==length(ic_params)) ? "initial condition, (t₀, T₀)" : nothing,
@@ -390,25 +373,61 @@ begin
 			)
 		end
 	end
-	scatter!([_t′], [_T′],
-		color=my_colors[1], strokewidth=1,
-		label="(t′, T(t′))"
+	scatter!([t′], [T′],
+		color="black", strokewidth=1,
+		label="(t′, θ(t′))"
 	)
-	# for params in [params_1, params_2]
-	# 	scatter!([params.t₀], [params.T₀], 
-	# 		label="initial condition, (t₀, T₀)", 
-	# 		strokewidth=2, color=my_colors[2])
-	# end
+
 	ylims!(the_ylims...)
 	xlims!(minimum(t), maximum(t))
-	scatter!([NaN], [NaN],
-		color=:white, strokewidth=1,marker=:rect,
-		label="initial condition (t₀, T₀)"
+	if viz_solns
+		scatter!([NaN], [NaN],
+			color=:white, strokewidth=1,marker=:rect,
+			label="(t₀, θ₀)"
+		)
+	
+		Colorbar(fig[1,2], limits=(0, t′), 
+			colormap=ColorSchemes.viridis, label="initial time, t₀ [min]")
+	end
+	axislegend(@sprintf("τ = %.1f min\n(t₀, θ₀) = ?", τ), position=:rb)
+	save(savename, fig)
+	fig
+end
+
+# ╔═╡ 0f23ddd3-115c-47b6-8fe1-44ba5c117a35
+viz_infinite_soln(120.0, "infinite_soln.pdf", viz_solns=false)
+
+# ╔═╡ 5da6eb96-85d7-42fc-9962-e15245838282
+viz_infinite_soln(120.0, "infinite_soln_trajectory.pdf", viz_solns=true)
+
+# ╔═╡ 1ae1eab3-f0f1-453d-8bd7-e269db431d7d
+function viz_infinite_soln2(t′::Float64, savename::String)
+	ic_params = ic_params_list(t′, n=170, t_start=-25.0)
+	params = (; T₀=T₀, Tₐ=Tₐ, t₀=0.0, τ=τ)
+	T′ = T(t′, params)
+	
+	fig = Figure(resolution = (500, 400))
+	ax  = Axis(fig[1, 1], 
+			   xlabel="initial time, t₀ [min]", 
+			   ylabel="initial temperature, θ₀ [°C]")
+	
+	draw_axes!(ax)
+	viz_air_temp(ax, Tₐ)
+	lines!([p.t₀ for p in ic_params], [p.T₀ for p in ic_params], color=my_colors[4])
+	scatter!([t′], [T′],
+		color="black", strokewidth=1,
+		label="(t′, θ(t′))"
 	)
 	axislegend(@sprintf("τ = %.1f min", τ), position=:rb)
-	save("infinite_soln.pdf", fig6)
-	fig6
+	ylims!(the_ylims...)
+	xlims!(minimum(t), maximum(t))
+	
+	save(savename, fig)
+	fig
 end
+
+# ╔═╡ b2eb5dc4-3167-4462-93ea-c937b8e9ff1d
+viz_infinite_soln2(120.0, "viz_line_of_solns.pdf")
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -1711,13 +1730,10 @@ version = "3.5.0+0"
 # ╠═e16652ba-d11e-4f87-b3d6-5f019e8c2b5d
 # ╠═ca3b6534-9099-4ed8-8627-b85527307f5a
 # ╟─bb2fa8fb-32be-47a2-a659-7c3fa209d068
-# ╟─485c034f-db48-4c4a-b55b-fe27cd817568
 # ╠═4e3e686a-02e6-4fc7-89a7-3aebfdb6b351
 # ╠═28a37905-7196-4779-8eb9-b06563b090e5
 # ╠═82b478ac-6156-48ca-8f59-206388e255a7
 # ╠═196eb94f-28d1-4e75-8670-8b87e36f0048
-# ╟─68719d16-963d-4dab-8e35-e235104e2bc0
-# ╠═a827a095-2868-43ae-9b04-b6d817318474
 # ╠═9e0255b0-13d0-4fd5-8aa0-19e04117545d
 # ╠═2482c26b-f570-4b04-8fe5-ac75a82d5660
 # ╠═eaf6b0f5-ccb0-4e5c-bae1-cc82e34aee85
@@ -1725,8 +1741,12 @@ version = "3.5.0+0"
 # ╠═d54e803f-621c-48d3-b50b-aadae0d71296
 # ╠═a6574e8c-4ed7-4ec0-9b21-6f38c0141580
 # ╠═cdb664e8-cf11-42e5-bd99-bd333f1e5d3a
-# ╠═1414c1e5-08a0-4475-ad02-f21d8d6b4c05
-# ╟─f5b4d968-e46d-4373-aaba-e274a3261e0a
+# ╟─95f4a495-b3f5-476a-bccb-9ebe2141dac3
+# ╠═d2d0d681-0323-48fb-b521-c6fe4e006357
 # ╠═f7a341b1-8d6f-4263-b2a7-73ea0df11722
+# ╠═0f23ddd3-115c-47b6-8fe1-44ba5c117a35
+# ╠═5da6eb96-85d7-42fc-9962-e15245838282
+# ╠═1ae1eab3-f0f1-453d-8bd7-e269db431d7d
+# ╠═b2eb5dc4-3167-4462-93ea-c937b8e9ff1d
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

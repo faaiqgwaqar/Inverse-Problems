@@ -28,7 +28,7 @@ dope_theme = Theme(
         titlehalign=:left,
         titlesize=16,
         labelsize=16,
-        framecolor=(:black, 0.5)
+        framecolor=(:black, 0.5),
         # padding = (1, 0, 0, 0),
     ),
     Axis3 = (
