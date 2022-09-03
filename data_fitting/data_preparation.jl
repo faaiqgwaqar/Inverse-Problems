@@ -33,7 +33,7 @@ function read_data(filename::String)
 end
 
 # ╔═╡ 3c2e28af-1506-4ca6-be48-4e38bd67097d
-run = 11
+run = 12
 
 # ╔═╡ 60a97118-1fc1-403b-97fa-fce162e8d6fd
 filename = "limev$run.csv"
@@ -75,7 +75,7 @@ function viz_data(data::DataFrame, Tₐ::Float64; shld_i_save::Bool=false)
 	fig = Figure()
 	ax  = Axis(fig[1, 1], 
 		       xlabel="time, t [min]",
-		       ylabel="temperature, θ [°C]",
+		       ylabel="temperature [°C]",
                xtickalign=1, ytickalign=1
 	)
 	vlines!(ax, [0.0], color="gray", linewidth=1)
@@ -123,7 +123,7 @@ viz_data(downsampled_data, Tₐ, shld_i_save=true)
 md"## export data for other tasks"
 
 # ╔═╡ 322c60c0-1e04-4bd8-a3f9-2802e8deb605
-jldsave("nice_data_run_$run.jld2"; data=downsampled_data, T₀=T₀, Tₐ=Tₐ)
+jldsave("data_run_$run.jld2"; data=downsampled_data, T₀=T₀, Tₐ=Tₐ)
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """

@@ -1,5 +1,7 @@
+my_colors = ColorSchemes.Dark2_5
+
 dope_theme = Theme(
-    palette = (color=[c for c in ColorSchemes.Dark2_5], marker=[:circle, :utriangle, :cross, :rect, :diamond, :dtriangle, :pentagon, :xcross]),
+    palette = (color=[c for c in my_colors], marker=[:circle, :utriangle, :cross, :rect, :diamond, :dtriangle, :pentagon, :xcross]),
     textcolor = :gray40,
     linewidth=4,
     fontsize=20,
