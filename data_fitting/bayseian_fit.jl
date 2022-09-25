@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.9
+# v0.19.11
 
 using Markdown
 using InteractiveUtils
@@ -7,18 +7,14 @@ using InteractiveUtils
 # ╔═╡ 43bcf4b0-fbfc-11ec-0e23-bb05c02078c9
 using DataFrames, Distributions, Turing, LinearAlgebra,Random, JLD2, CairoMakie, ColorSchemes, StatsBase
 
+# ╔═╡ 7f7f3c12-343c-4e19-8371-a065bb9051cb
+begin
+	include("dope_makie_theme.jl")
+	set_theme!(dope_theme)
+end
+
 # ╔═╡ a081eb2c-ff46-4efa-a6cd-ee3e9209e14e
 my_colors = ColorSchemes.Hokusai3
-
-# ╔═╡ 7f7f3c12-343c-4e19-8371-a065bb9051cb
-update_theme!(
-	fontsize=20, 
-	linewidth=4, 
-	Axis=(; xgridstyle=:dash, ygridstyle=:dash, xtickalign=1, ytickalign=1),
-	resolution=(500, 380),
-	palette = (color=my_colors, 
-	           marker=[:circle, :utriangle, :cross, :rect, :diamond, :dtriangle, :pentagon, :xcross])
-)
 
 # ╔═╡ a13ba151-99c1-47ae-b96e-dc90464990b6
 function T_model(t, τ, T₀, Tₐ)
@@ -49,14 +45,14 @@ end
 md"# identify τ"
 
 # ╔═╡ 269ac9fa-13f3-443a-8669-e8f13d3518a6
-run = 1
+run = 11
 
 # ╔═╡ d32079ef-7ebd-4645-9789-1d258b13b66f
-data = load("nice_data_run_$run.jld2")["data"]
+data = load("data_run_$run.jld2")["data"]
 
 # ╔═╡ b8a3fc88-6e4d-457d-8582-f6302fb206ac
-fixed_params = (T₀=load("nice_data_run_$run.jld2")["T₀"], 
-                Tₐ=load("nice_data_run_$run.jld2")["Tₐ"])
+fixed_params = (T₀=load("data_run_$run.jld2")["T₀"], 
+                Tₐ=load("data_run_$run.jld2")["Tₐ"])
 
 # ╔═╡ ecd4ea3f-1775-4c4e-a679-f8e15eaad3f7
 @model function identify_τ(data, fixed_params)
@@ -127,14 +123,14 @@ function viz_fit_τ(data::DataFrame, fixed_params::NamedTuple, chain::Chains)
                xtickalign=1, ytickalign=1
 	)
 	hlines!(ax, fixed_params.Tₐ, style=:dash, 
-		    linestyle=:dot, label="Tₐ", color=Cycled(3))
+		    linestyle=:dot, label="θ∞", color=Cycled(3))
 	lines!(t, T_model.(t, τ.μ, fixed_params.T₀, fixed_params.Tₐ),
         label="model", color=my_colors[2])
 	band!(t, T_model.(t, τ.lb, fixed_params.T₀, fixed_params.Tₐ), 
 		     T_model.(t, τ.ub, fixed_params.T₀, fixed_params.Tₐ), 
 		color=(my_colors[6], 0.25))
 	scatter!(data[:, "t [min]"], data[:, "T [°C]"], 
-		label="{(tᵢ, Tᵢ)}", strokewidth=1)
+		label="{(tᵢ, θᵢ)}", strokewidth=1)
 	axislegend(position=:rb)
 	xlims!(-0.03*max_t, 1.03*max_t)
 	fig
@@ -165,6 +161,7 @@ begin
 				     color=(my_colors[2], 0.4)
 			)
 		end
+		vlines!(ax, [0.0], color="gray", linewidth=1)
 		errorbars!([0], [fixed_params.T₀], δ, δ, 
 			       whiskerwidth=10, linewidth=3, color=:black)
 		scatter!(data[1, "t [min]"], data[1, "T [°C]"], 
@@ -181,14 +178,14 @@ end
 md"# inverse problem"
 
 # ╔═╡ 7df25291-a600-449e-a194-3ec7c3f11361
-other_run = run == 1 ? 2 : 1
+other_run = 12
 
 # ╔═╡ 8f145533-7208-4c25-9b1e-84370c7ac7ca
-data2 = load("nice_data_run_$other_run.jld2")["data"]
+data2 = load("data_run_$other_run.jld2")["data"]
 
 # ╔═╡ 0bff14a8-89eb-488c-88c6-e08a64e577ed
-fixed_params2 = (T₀=load("nice_data_run_$other_run.jld2")["T₀"], 
-                 Tₐ=load("nice_data_run_$other_run.jld2")["Tₐ"])
+fixed_params2 = (T₀=load("data_run_$other_run.jld2")["T₀"], 
+                 Tₐ=load("data_run_$other_run.jld2")["Tₐ"])
 
 # ╔═╡ e2ad524c-9d8b-4b85-81d5-96fc3303e4fa
 σ_prior = analyze_posterior(chain_τ, :σ)
@@ -216,7 +213,7 @@ fixed_params2 = (T₀=load("nice_data_run_$other_run.jld2")["T₀"],
 end
 
 # ╔═╡ 62c5e645-285d-470e-b46b-00f0471b7329
-i_obs = 20
+i_obs = 25
 
 # ╔═╡ efdf4047-81ab-45db-9980-267df2bad314
 model_T₀ = identify_T₀(data2, i_obs, fixed_params2.Tₐ)
@@ -230,7 +227,7 @@ function viz_posterior_T₀(chain::Chains)
 	
 	fig = Figure()
 	ax  = Axis(fig[1, 1], 
-		xlabel="initial temperature, T₀ [°C]", 
+		xlabel="initial temperature, θ₀ [°C]", 
 		ylabel="# posterior samples")
 	ylims!(0, nothing)
 	hist!(T₀.samples, color=my_colors[3])
@@ -258,9 +255,9 @@ function viz_fit_T₀(data::DataFrame, i_obs::Int, Tₐ::Float64, chain::Chains)
 		       ylabel="temperature [°C]",
                xtickalign=1, ytickalign=1
 	)
-	hlines!(ax, Tₐ, style=:dash, linestyle=:dot, label="Tₐ", color=Cycled(3))
+	hlines!(ax, Tₐ, style=:dash, linestyle=:dot, label="θ∞", color=Cycled(3))
 	scatter!(data[:, "t [min]"], data[:, "T [°C]"], 
-		label="{(tᵢ, Tᵢ)} (unobserved)", strokewidth=1, color=(:white, 0.0))
+		label="{(tᵢ, θᵢ)} (test data)", strokewidth=1, color=(:white, 0.0))
 	lines!(t, T_model.(t, τ.μ, T₀.μ, Tₐ),
         label="model", color=my_colors[2])
 	band!(t, T_model.(t, τ.μ, T₀.lb, Tₐ), T_model.(t, τ.μ, T₀.ub, Tₐ), 
@@ -273,7 +270,7 @@ function viz_fit_T₀(data::DataFrame, i_obs::Int, Tₐ::Float64, chain::Chains)
 	# 	end
 	# end
 	scatter!([data[i_obs, "t [min]"]], [data[i_obs, "T [°C]"]], 
-		label="(tₖ, Tₖ) (observed)", strokewidth=1)
+		label="(tₖ, θₖ) (train data)", strokewidth=1)
 	axislegend(position=:rb)
 	xlims!(-0.03*max_t, 1.03*max_t)
 	fig
@@ -319,6 +316,9 @@ begin
 	inverse_problem_toy_viz(data2, fixed_params2, τ̄, 0.5, i_obs; show_soln=true)
 end
 
+# ╔═╡ 11382e60-7adc-48c6-a741-38a895075c6f
+
+
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
@@ -346,8 +346,9 @@ Turing = "~0.21.9"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.7.3"
+julia_version = "1.8.0"
 manifest_format = "2.0"
+project_hash = "7f0bb2eadb9d0a9c8f95cdbeeb1824ca28e9fd7b"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra"]
@@ -415,6 +416,7 @@ version = "2.3.0"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
+version = "1.1.1"
 
 [[deps.ArrayInterfaceCore]]
 deps = ["LinearAlgebra", "SparseArrays", "SuiteSparse"]
@@ -577,6 +579,7 @@ version = "3.45.0"
 [[deps.CompilerSupportLibraries_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
+version = "0.5.2+0"
 
 [[deps.CompositionsBase]]
 git-tree-sha1 = "455419f7e328a1a2493cabc6428d79e951349769"
@@ -684,6 +687,7 @@ version = "0.8.6"
 [[deps.Downloads]]
 deps = ["ArgTools", "FileWatching", "LibCURL", "NetworkOptions"]
 uuid = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
+version = "1.6.0"
 
 [[deps.DualNumbers]]
 deps = ["Calculus", "NaNMath", "SpecialFunctions"]
@@ -1044,10 +1048,12 @@ version = "0.1.3"
 [[deps.LibCURL]]
 deps = ["LibCURL_jll", "MozillaCACerts_jll"]
 uuid = "b27032c2-a3e7-50c8-80cd-2d36dbcbfd21"
+version = "0.6.3"
 
 [[deps.LibCURL_jll]]
 deps = ["Artifacts", "LibSSH2_jll", "Libdl", "MbedTLS_jll", "Zlib_jll", "nghttp2_jll"]
 uuid = "deac9b47-8bc7-5906-a0fe-35ac56dc84c0"
+version = "7.84.0+0"
 
 [[deps.LibGit2]]
 deps = ["Base64", "NetworkOptions", "Printf", "SHA"]
@@ -1056,6 +1062,7 @@ uuid = "76f85450-5226-5b5a-8eaa-529ad045b433"
 [[deps.LibSSH2_jll]]
 deps = ["Artifacts", "Libdl", "MbedTLS_jll"]
 uuid = "29816b5a-b9ab-546f-933c-edad1886dfa8"
+version = "1.10.2+0"
 
 [[deps.Libdl]]
 uuid = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
@@ -1186,6 +1193,7 @@ version = "0.4.3"
 [[deps.MbedTLS_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "c8ffd9c3-330d-5841-b78e-0817d7145fa1"
+version = "2.28.0+0"
 
 [[deps.MicroCollections]]
 deps = ["BangBang", "InitialValues", "Setfield"]
@@ -1210,6 +1218,7 @@ version = "0.3.3"
 
 [[deps.MozillaCACerts_jll]]
 uuid = "14a3606d-f60d-562e-9121-12d972cd8159"
+version = "2022.2.1"
 
 [[deps.NNlib]]
 deps = ["Adapt", "ChainRulesCore", "LinearAlgebra", "Pkg", "Requires", "Statistics"]
@@ -1241,6 +1250,7 @@ version = "1.0.2"
 
 [[deps.NetworkOptions]]
 uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
+version = "1.2.0"
 
 [[deps.Observables]]
 git-tree-sha1 = "dfd8d34871bc3ad08cd16026c1828e271d554db9"
@@ -1262,6 +1272,7 @@ version = "1.3.5+1"
 [[deps.OpenBLAS_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
 uuid = "4536629a-c528-5b80-bd46-f80d51c5b363"
+version = "0.3.20+0"
 
 [[deps.OpenEXR]]
 deps = ["Colors", "FileIO", "OpenEXR_jll"]
@@ -1278,6 +1289,7 @@ version = "3.1.1+0"
 [[deps.OpenLibm_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "05823500-19ac-5b8b-9628-191a04bc5112"
+version = "0.8.1+0"
 
 [[deps.OpenSSL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1353,6 +1365,7 @@ version = "0.40.1+0"
 [[deps.Pkg]]
 deps = ["Artifacts", "Dates", "Downloads", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "REPL", "Random", "SHA", "Serialization", "TOML", "Tar", "UUIDs", "p7zip_jll"]
 uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
+version = "1.8.0"
 
 [[deps.PkgVersion]]
 deps = ["Pkg"]
@@ -1490,6 +1503,7 @@ version = "2.0.1"
 
 [[deps.SHA]]
 uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
+version = "0.7.0"
 
 [[deps.SIMD]]
 git-tree-sha1 = "7dbc15af7ed5f751a82bf3ed37757adf76c32402"
@@ -1633,6 +1647,7 @@ uuid = "4607b0f0-06f3-5cda-b6b1-a6196a1729e9"
 [[deps.TOML]]
 deps = ["Dates"]
 uuid = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
+version = "1.0.0"
 
 [[deps.TableTraits]]
 deps = ["IteratorInterfaceExtensions"]
@@ -1649,6 +1664,7 @@ version = "1.7.0"
 [[deps.Tar]]
 deps = ["ArgTools", "SHA"]
 uuid = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
+version = "1.10.0"
 
 [[deps.TensorCore]]
 deps = ["LinearAlgebra"]
@@ -1789,6 +1805,7 @@ version = "1.4.0+3"
 [[deps.Zlib_jll]]
 deps = ["Libdl"]
 uuid = "83775a58-1f1d-513f-b197-d71354ab007a"
+version = "1.2.12+3"
 
 [[deps.ZygoteRules]]
 deps = ["MacroTools"]
@@ -1811,6 +1828,7 @@ version = "0.15.1+0"
 [[deps.libblastrampoline_jll]]
 deps = ["Artifacts", "Libdl", "OpenBLAS_jll"]
 uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
+version = "5.1.1+0"
 
 [[deps.libfdk_aac_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1839,10 +1857,12 @@ version = "1.3.7+1"
 [[deps.nghttp2_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "8e850ede-7688-5339-a07c-302acd2aaf8d"
+version = "1.48.0+0"
 
 [[deps.p7zip_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
+version = "17.4.0+0"
 
 [[deps.x264_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1897,5 +1917,6 @@ version = "3.5.0+0"
 # ╠═d592943d-2402-4857-9509-4ae74dee26c4
 # ╠═007ae23e-7572-4075-859b-451b379be0e6
 # ╠═db258674-540b-4f89-b782-46dcd8865bf2
+# ╠═11382e60-7adc-48c6-a741-38a895075c6f
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

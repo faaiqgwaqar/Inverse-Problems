@@ -5,7 +5,7 @@ using Markdown
 using InteractiveUtils
 
 # ╔═╡ 38925e1a-817b-4575-9768-02fb68bec2d6
-using CairoMakie, ColorSchemes, CSV, DataFrames, StatsBase, JLD2, PlutoUI, Colors
+using CairoMakie, ColorSchemes, CSV, DataFrames, StatsBase, JLD2, PlutoUI, Colors, Random
 
 # ╔═╡ 637f2cf6-0cb0-4ea2-b1c5-6caccf46c06d
 begin
@@ -33,7 +33,7 @@ function read_data(filename::String)
 end
 
 # ╔═╡ 3c2e28af-1506-4ca6-be48-4e38bd67097d
-run = 12
+run = 11
 
 # ╔═╡ 60a97118-1fc1-403b-97fa-fce162e8d6fd
 filename = "limev$run.csv"
@@ -79,9 +79,9 @@ function viz_data(data::DataFrame, Tₐ::Float64; shld_i_save::Bool=false)
                xtickalign=1, ytickalign=1
 	)
 	vlines!(ax, [0.0], color="gray", linewidth=1)
-	hlines!(ax, Tₐ, style=:dash, linestyle=:dot, label="θᵃⁱʳ", color=Cycled(3))
+	hlines!(ax, Tₐ, style=:dash, linestyle=:dot, label=L"$\theta_\infty$", color=Cycled(3))
 	scatter!(data[:, "t [min]"], data[:, "T [°C]"], 
-		label="{(tᵢ, θᵢ)}", strokewidth=1)
+		label=L"$(t_i, \theta_i)_{i=1}^N$", strokewidth=1)
 	axislegend(position=:rb)
 	xlims!(-0.03*max_t, 1.03*max_t)
 	if shld_i_save
@@ -100,17 +100,38 @@ equilibrium = 95% of way to air temp.
 "
 
 # ╔═╡ 8c76392f-b85e-4585-942c-4da13babedec
-n = 25
+n = 10
+
+# ╔═╡ 75b5f476-d7de-42ba-9dbf-4b5a52cf2006
+T_cuts = range(T₀, Tₐ, length=5)[2:end-1]
+
+# ╔═╡ 316da57d-3c75-414d-afc3-8b89869fc9c3
+i_cuts = [findfirst(data[:, "T [°C]"] .> T_cut) for T_cut in T_cuts]
 
 # ╔═╡ f950ade9-1a1a-4398-a954-635d03599afa
 function downsample(data::DataFrame, n::Int, T₀::Float64, Tₐ::Float64)
-	i_eq = findfirst(data[:, "T [°C]"] .> T₀ + (Tₐ - T₀) * 0.95)
-	
-	id_sample = vcat([1], 
-		sort(sample(2:i_eq, n, replace=false)),
-		sort(sample(i_eq+1:nrow(data), n-1, replace=false)), 
-	)
-	return data[id_sample, :]
+	# divide T into 5 blocks; sample n from each
+	T_cuts = range(T₀, Tₐ, length=5)[2:end]
+	i_cuts = [findfirst(data[:, "T [°C]"] .>= T_cut) for T_cut in T_cuts]
+	push!(i_cuts, nrow(data))
+
+	Random.seed!(97330)
+	i_sample = [1]
+	for c = 1:length(T_cuts) + 1
+		if c == 1
+			i_start = 2
+		else
+			i_start = i_cuts[c - 1]
+		end
+		this_sample = sample(i_start:i_cuts[c], n, replace=false)
+		i_sample = vcat(i_sample, this_sample)
+	end
+	# id_sample = vcat(
+	# 	[1],
+	# 	sort(sample(2:i_eq, n, replace=false)),
+	# 	sort(sample(i_eq+1:nrow(data), n-1, replace=false)), 
+	# )
+	return data[i_sample, :]
 end
 
 # ╔═╡ e35322f8-5065-43ef-a846-77de00f4d065
@@ -135,6 +156,7 @@ Colors = "5ae59095-9a9b-59fe-a467-6f913c188581"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
 [compat]
@@ -154,7 +176,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.0"
 manifest_format = "2.0"
-project_hash = "64211a914794597fddb0516baa141282833f2c52"
+project_hash = "ba50bcdfc8683c4a3a3c26af89647079352ec7dc"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra"]
@@ -1423,6 +1445,8 @@ version = "3.5.0+0"
 # ╠═5d3acc22-3a32-4ff6-9a25-cd9a7594a34a
 # ╟─f07ab15c-fe20-4138-a28e-6eca0f774ef5
 # ╠═8c76392f-b85e-4585-942c-4da13babedec
+# ╠═75b5f476-d7de-42ba-9dbf-4b5a52cf2006
+# ╠═316da57d-3c75-414d-afc3-8b89869fc9c3
 # ╠═f950ade9-1a1a-4398-a954-635d03599afa
 # ╠═e35322f8-5065-43ef-a846-77de00f4d065
 # ╠═9c6d23d9-fcc2-4704-86c5-50a13d6af2e0
