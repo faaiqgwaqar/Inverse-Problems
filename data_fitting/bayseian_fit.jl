@@ -285,22 +285,24 @@ data2 = load("data_run_$other_run.jld2")["data"]
 fixed_params2 = (T₀=load("data_run_$other_run.jld2")["T₀"], 
                  Tₐ=load("data_run_$other_run.jld2")["Tₐ"])
 
-# ╔═╡ e2ad524c-9d8b-4b85-81d5-96fc3303e4fa
-σ_prior = analyze_posterior(chain_τ, :σ)
-
 # ╔═╡ 4e68878f-c278-4218-8a52-ce86490981da
-τ_prior = analyze_posterior(chain_τ, :τ)
+begin
+	_τ_prior = analyze_posterior(chain_τ, :τ)
+	τ_prior2 = truncated(Normal(_τ_prior.μ, _τ_prior.σ^2), 0.0, nothing)
+end
+
+# ╔═╡ 8d358b8d-7432-421a-8661-4550c0457f97
+T₀_prior = Uniform(0.0, 15.0)
 
 # ╔═╡ 8dbbbe1c-4eb6-4ac2-a447-bbaa500e03b4
 @model function identify_T₀(data, i_obs, Tₐ)
     # Prior distributions.
-	T₀ ~ Uniform(0.0, 10.0)
+	T₀ ~ T₀_prior
 	if data[i_obs, "T [°C]"] < 10.0
 		error("prior makes no sense")
 	end
-    # σ ~ Normal(σ_prior.μ, 20 * σ_prior.σ^2) # °C
 	σ ~ Uniform(0, 0.5)
-	τ ~ truncated(Normal(τ_prior.μ, τ_prior.σ^2), 0.0, nothing)
+	τ ~ τ_prior2
 
     # Observation
 	tᵢ = data[i_obs, "t [min]"]
@@ -317,7 +319,7 @@ i_obs = 25
 model_T₀ = identify_T₀(data2, i_obs, fixed_params2.Tₐ)
 
 # ╔═╡ 287fd4e2-3afd-4540-be15-f2a486e36e37
-chain_T₀ = sample(model_T₀, NUTS(), 1_000; progress=true)
+chain_T₀ = sample(model_T₀, NUTS(), 5_000; progress=true)
 
 # ╔═╡ 282f22da-b95a-41b2-a98a-12c6acd7bc06
 function viz_posterior_T₀(chain::Chains)
@@ -342,6 +344,28 @@ posterior_samples = DataFrame(sample(chain_T₀[[:τ, :T₀]], 300; replace=fals
 
 # ╔═╡ a2b6477e-7e7a-48ea-b894-e42882e382f8
 sample(chain_τ, 250, replace=false)
+
+# ╔═╡ 477d2b05-1e78-41ad-99af-b0dedfef617f
+function viz_fit_T₀_prior()
+	max_t = maximum(data2[:, "t [min]"])
+    t = range(0.0, max_t*1.05, length=200)
+
+	fig = Figure()
+	ax  = Axis(fig[1, 1], 
+		       xlabel="time, t [min]",
+		       ylabel="temperature [°C]"
+	)
+	for s = 1:250
+		τ = rand(τ_prior2)
+		T₀ = rand(T₀_prior)
+		lines!(t, T_model.(t, τ, T₀, fixed_params.Tₐ),
+	        	color=(the_colors["model"], 0.1))
+	end
+	return fig
+end
+
+# ╔═╡ b61d5001-3744-432b-bc5e-f8003dbe0a99
+viz_fit_T₀_prior()
 
 # ╔═╡ d592943d-2402-4857-9509-4ae74dee26c4
 function viz_fit_T₀(data::DataFrame, i_obs::Int, Tₐ::Float64, chain::Chains, with_soln::Bool)
@@ -2102,8 +2126,8 @@ version = "3.5.0+0"
 # ╠═7df25291-a600-449e-a194-3ec7c3f11361
 # ╠═8f145533-7208-4c25-9b1e-84370c7ac7ca
 # ╠═0bff14a8-89eb-488c-88c6-e08a64e577ed
-# ╠═e2ad524c-9d8b-4b85-81d5-96fc3303e4fa
 # ╠═4e68878f-c278-4218-8a52-ce86490981da
+# ╠═8d358b8d-7432-421a-8661-4550c0457f97
 # ╠═8dbbbe1c-4eb6-4ac2-a447-bbaa500e03b4
 # ╠═62c5e645-285d-470e-b46b-00f0471b7329
 # ╠═efdf4047-81ab-45db-9980-267df2bad314
@@ -2112,6 +2136,8 @@ version = "3.5.0+0"
 # ╠═bd5602cd-8b6d-430f-a700-40b449d1da27
 # ╠═d959317b-3f19-495e-95ac-50a8fecd659f
 # ╠═a2b6477e-7e7a-48ea-b894-e42882e382f8
+# ╠═477d2b05-1e78-41ad-99af-b0dedfef617f
+# ╠═b61d5001-3744-432b-bc5e-f8003dbe0a99
 # ╠═d592943d-2402-4857-9509-4ae74dee26c4
 # ╠═007ae23e-7572-4075-859b-451b379be0e6
 # ╠═5b56d8fb-ac24-4ac5-82a7-a51b5a6eb73a
