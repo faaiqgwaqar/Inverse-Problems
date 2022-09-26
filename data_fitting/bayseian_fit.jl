@@ -18,11 +18,7 @@ begin
 		linewidth=4,
 		markersize=14,
 		titlefont=aog.firasans("Light"),
-		# Axis=(; xgridstyle=:dash, ygridstyle=:dash, xtickalign=1, ytickalign=1, titlefont="open-sans"),
-		resolution=(500, 380),
-		# palette = (color=my_colors, 
-		#            marker=[:circle, :utriangle, :cross, :rect, :diamond, :dtriangle, :pentagon, :xcross]),
-		# font="open-sans"
+		resolution=(500, 380)
 	)
 end
 
@@ -30,12 +26,15 @@ end
 my_colors = aog.wongcolors()
 
 # ╔═╡ 8931e445-6664-4609-bfa1-9e808fbe9c09
-the_colors = Dict("air"=>my_colors[1], "data"=>my_colors[2], "distn"=>my_colors[7], "model"=>my_colors[3])
+the_colors = Dict("air"   => my_colors[1], 
+	              "data"  =>my_colors[2],
+	              "distn" =>my_colors[7], 
+	              "model" =>my_colors[3])
 
 # ╔═╡ a13ba151-99c1-47ae-b96e-dc90464990b6
 function T_model(t, τ, T₀, Tₐ, t₀=0.0)
     if t < 0.0
-        error("invalid for t < 0")
+        return T₀
 	end
     return Tₐ .+ (T₀ - Tₐ) * exp(-(t - t₀) / τ)
 end
@@ -66,6 +65,7 @@ function viz_model_only2()
 			linestyle=:dot, label="θᵃⁱʳ", color=the_colors["air"])
 	ylims!(-0.1, 1.1)
 	xlims!(0, 4)
+	save("model_soln.pdf", fig)
 	return fig
 end
 
@@ -154,6 +154,7 @@ function viz_posterior_τ(chain::Chains)
 	ylims!(0, nothing)
 	density!(τ.samples, color=the_colors["distn"], strokewidth=1)
 	lines!([τ.lb, τ.ub], [0, 0], color="black", linewidth=10)
+	save("posterior_tau.pdf", fig)
 	fig
 end
 
@@ -181,6 +182,7 @@ function viz_τ_prior(τ_prior_1)
 	
 	ylims!(5, 20.0)
 	xlims!(-0.03*max_t, 1.03*max_t)
+	save("prior_tau.pdf", fig)
 	fig
 end
 
@@ -227,6 +229,7 @@ function viz_fit_τ(data::DataFrame, fixed_params::NamedTuple, chain::Chains, wi
 	axislegend(position=:rb)
 	ylims!(5, 20.0)
 	xlims!(-0.03*max_t, 1.03*max_t)
+	save("find_tau" * (with_soln ? "_soln" : "_data") * ".pdf", fig)
 	fig
 end
 
@@ -315,7 +318,7 @@ T₀_prior = Uniform(0.0, 15.0)
 end
 
 # ╔═╡ 62c5e645-285d-470e-b46b-00f0471b7329
-i_obs = 25
+i_obs = 35
 
 # ╔═╡ efdf4047-81ab-45db-9980-267df2bad314
 model_T₀ = identify_T₀(data2, i_obs, fixed_params2.Tₐ)
@@ -324,7 +327,7 @@ model_T₀ = identify_T₀(data2, i_obs, fixed_params2.Tₐ)
 chain_T₀ = sample(model_T₀, NUTS(), 5_000; progress=true)
 
 # ╔═╡ 282f22da-b95a-41b2-a98a-12c6acd7bc06
-function viz_posterior_T₀(chain::Chains)
+function viz_posterior_T₀(chain::Chains, i_obs::Int)
 	T₀ = analyze_posterior(chain_T₀, :T₀)
 	
 	fig = Figure()
@@ -335,11 +338,12 @@ function viz_posterior_T₀(chain::Chains)
 	density!(T₀.samples, color=the_colors["distn"], strokewidth=1)
 	vlines!(ax, [data2[1, "T [°C]"]], linestyle=:dash, color=the_colors["data"])
 	lines!([T₀.lb, T₀.ub], [0, 0], color="black", linewidth=10)
+	save("posterior_theta_zero_i_obs_$(i_obs).pdf", fig)
 	fig
 end
 
 # ╔═╡ bd5602cd-8b6d-430f-a700-40b449d1da27
-viz_posterior_T₀(chain_T₀)
+viz_posterior_T₀(chain_T₀, i_obs)
 
 # ╔═╡ d959317b-3f19-495e-95ac-50a8fecd659f
 posterior_samples = DataFrame(sample(chain_T₀[[:τ, :T₀]], 300; replace=false))
@@ -357,7 +361,7 @@ function viz_fit_T₀_prior()
 		       xlabel="time, t [min]",
 		       ylabel="temperature [°C]"
 	)
-		vlines!(ax, [0.0], color=("gray", 0.5), linewidth=1)
+	vlines!(ax, [0.0], color=("gray", 0.5), linewidth=1)
 
 	for s = 1:250
 		τ = rand(τ_prior2)
@@ -365,6 +369,7 @@ function viz_fit_T₀_prior()
 		lines!(t, T_model.(t, τ, T₀, fixed_params.Tₐ),
 	        	color=(the_colors["model"], 0.1))
 	end
+	save("prior_theta_0.pdf", fig)
 	return fig
 end
 
@@ -421,6 +426,8 @@ function viz_fit_T₀(data::DataFrame, i_obs::Int, Tₐ::Float64, chain::Chains,
 	axislegend(position=:rb)
 	xlims!(-0.03*max_t, 1.03*max_t)
 	ylims!(5, 20.0)
+	save("find_theta_zero_i_obs_$(i_obs)_" * (with_soln ? "_soln" : "_data") * ".pdf", fig)
+
 	fig
 end
 
@@ -472,6 +479,9 @@ end
 
 # ╔═╡ 1e5ba0b1-c129-410c-9048-89a75210fd40
 md"## the ill-posed inverse problem"
+
+# ╔═╡ da778a83-aa3d-427f-9cd7-eede559c5c37
+
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -2147,5 +2157,6 @@ version = "3.5.0+0"
 # ╠═5b56d8fb-ac24-4ac5-82a7-a51b5a6eb73a
 # ╠═db258674-540b-4f89-b782-46dcd8865bf2
 # ╟─1e5ba0b1-c129-410c-9048-89a75210fd40
+# ╠═da778a83-aa3d-427f-9cd7-eede559c5c37
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
