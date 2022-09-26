@@ -171,6 +171,8 @@ function viz_τ_prior(τ_prior_1)
 		       ylabel="temperature [°C]",
                xtickalign=1, ytickalign=1
 	)
+	vlines!(ax, [0.0], color=("gray", 0.5), linewidth=1)
+
 	for s = 1:150
 		τ = rand(τ_prior_1)
 		lines!(t, T_model.(t, τ, fixed_params.T₀, fixed_params.Tₐ),
@@ -355,6 +357,8 @@ function viz_fit_T₀_prior()
 		       xlabel="time, t [min]",
 		       ylabel="temperature [°C]"
 	)
+		vlines!(ax, [0.0], color=("gray", 0.5), linewidth=1)
+
 	for s = 1:250
 		τ = rand(τ_prior2)
 		T₀ = rand(T₀_prior)
