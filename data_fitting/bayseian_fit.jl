@@ -5,24 +5,72 @@ using Markdown
 using InteractiveUtils
 
 # ╔═╡ 43bcf4b0-fbfc-11ec-0e23-bb05c02078c9
-using DataFrames, Distributions, Turing, LinearAlgebra,Random, JLD2, CairoMakie, ColorSchemes, StatsBase
+using DataFrames, Distributions, Turing, LinearAlgebra,Random, JLD2, CairoMakie, ColorSchemes, StatsBase, Colors
 
-# ╔═╡ 7f7f3c12-343c-4e19-8371-a065bb9051cb
+# ╔═╡ 9e3fecac-cdee-4985-950a-19bd7dbe92c5
+import AlgebraOfGraphics as aog
+
+# ╔═╡ 408e9992-a412-4b74-b4a8-25e566d65022
 begin
-	include("dope_makie_theme.jl")
-	set_theme!(dope_theme)
+	aog.set_aog_theme!(fonts=[aog.firasans("Light"), aog.firasans("Light")])
+	update_theme!(
+		fontsize=20, 
+		linewidth=4,
+		markersize=14,
+		titlefont=aog.firasans("Light"),
+		# Axis=(; xgridstyle=:dash, ygridstyle=:dash, xtickalign=1, ytickalign=1, titlefont="open-sans"),
+		resolution=(500, 380),
+		# palette = (color=my_colors, 
+		#            marker=[:circle, :utriangle, :cross, :rect, :diamond, :dtriangle, :pentagon, :xcross]),
+		# font="open-sans"
+	)
 end
 
 # ╔═╡ a081eb2c-ff46-4efa-a6cd-ee3e9209e14e
-my_colors = ColorSchemes.Hokusai3
+my_colors = aog.wongcolors()
+
+# ╔═╡ 8931e445-6664-4609-bfa1-9e808fbe9c09
+the_colors = Dict("air"=>my_colors[1], "data"=>my_colors[2], "distn"=>my_colors[7], "model"=>my_colors[3])
 
 # ╔═╡ a13ba151-99c1-47ae-b96e-dc90464990b6
-function T_model(t, τ, T₀, Tₐ)
+function T_model(t, τ, T₀, Tₐ, t₀=0.0)
     if t < 0.0
         error("invalid for t < 0")
 	end
-    return Tₐ .+ (T₀ - Tₐ) * exp(-t / τ)
+    return Tₐ .+ (T₀ - Tₐ) * exp(-(t - t₀) / τ)
 end
+
+# ╔═╡ ec30a9bf-8bda-4987-9f5c-abbb3b53eeca
+function viz_model_only()
+	fig = Figure()
+	ax  = Axis(fig[1, 1], xlabel="(t - t₀) / τ", ylabel="[θ(t) - θᵃⁱʳ]/[θ₀ - θᵃⁱʳ]")
+	ts = range(0.0, 4.0, length=400)
+	lines!(ts, exp.(-ts), color=the_colors["model"])
+	ylims!(0, 1)
+	xlims!(0, 4)
+	return fig
+end
+
+# ╔═╡ 1572f704-cd83-4e62-a081-50b669c8d18a
+viz_model_only()
+
+# ╔═╡ 346d44e8-7b20-4cfa-8f22-99c4e844f56d
+function viz_model_only2()
+	fig = Figure()
+	ax  = Axis(fig[1, 1], xlabel="(t - t₀) / τ", ylabel="θ(t)", 
+		yticks=([0, 1], ["θ₀", "θᵃⁱʳ"])
+	)
+	ts = range(0.0, 4.0, length=400)
+	lines!(ts, 1.0 .- exp.(-ts), color=the_colors["model"])
+	hlines!(ax, 1.0, style=:dash, 
+			linestyle=:dot, label="θᵃⁱʳ", color=the_colors["air"])
+	ylims!(-0.1, 1.1)
+	xlims!(0, 4)
+	return fig
+end
+
+# ╔═╡ 8ee1b06d-c255-4ae3-ac8b-06f7498dbf76
+viz_model_only2()
 
 # ╔═╡ 0176e392-7134-4404-94bc-0b87083fff55
 function T₀_model_iv(t′, T′, τ, Tₐ)
@@ -54,11 +102,14 @@ data = load("data_run_$run.jld2")["data"]
 fixed_params = (T₀=load("data_run_$run.jld2")["T₀"], 
                 Tₐ=load("data_run_$run.jld2")["Tₐ"])
 
+# ╔═╡ 7b8f64b9-9776-4385-a2f0-38f78d76ef79
+τ_prior_1 = Uniform(1.0, 60.0 * 4)
+
 # ╔═╡ ecd4ea3f-1775-4c4e-a679-f8e15eaad3f7
 @model function identify_τ(data, fixed_params)
     # Prior distributions.
     σ ~ Uniform(0.0, 0.5) # °C
-	τ ~ Uniform(1.0, 60.0 * 4)
+	τ ~ τ_prior_1
 
     # Observations.
     for i in 1:nrow(data)
@@ -74,7 +125,7 @@ end
 model_τ = identify_τ(data, fixed_params)
 
 # ╔═╡ bb3ae6a9-5d87-4b90-978e-8674f6c5bd99
-chain_τ = sample(model_τ, NUTS(), 1_000; progress=true)
+chain_τ = sample(model_τ, NUTS(), 5_000; progress=true)
 
 # ╔═╡ ff7e4fd8-e34b-478e-ab8a-2f35aba99ba6
 function analyze_posterior(chain::Chains, param::Symbol)
@@ -99,9 +150,9 @@ function viz_posterior_τ(chain::Chains)
 	fig = Figure()
 	ax  = Axis(fig[1, 1], 
 		xlabel="time constant, τ [min]", 
-		ylabel="# posterior samples")
+		ylabel="posterior density")
 	ylims!(0, nothing)
-	hist!(τ.samples, color=my_colors[2])
+	density!(τ.samples, color=the_colors["distn"], strokewidth=1)
 	lines!([τ.lb, τ.ub], [0, 0], color="black", linewidth=10)
 	fig
 end
@@ -109,8 +160,33 @@ end
 # ╔═╡ 294e240f-c146-4ef3-b172-26e70ad3ed19
 viz_posterior_τ(chain_τ)
 
+# ╔═╡ 25b9bccd-0556-4075-a1e9-db9b3d31b3fe
+function viz_τ_prior(τ_prior_1)
+	max_t = maximum(data[:, "t [min]"])
+    t = range(0.0, maximum(data[:, "t [min]"])*1.05, length=200)
+	
+	fig = Figure()
+	ax  = Axis(fig[1, 1], 
+		       xlabel="time, t [min]",
+		       ylabel="temperature [°C]",
+               xtickalign=1, ytickalign=1
+	)
+	for s = 1:150
+		τ = rand(τ_prior_1)
+		lines!(t, T_model.(t, τ, fixed_params.T₀, fixed_params.Tₐ),
+        	label="θ(t; τ̂)", color=(the_colors["model"], 0.1))
+	end
+	
+	ylims!(5, 20.0)
+	xlims!(-0.03*max_t, 1.03*max_t)
+	fig
+end
+
+# ╔═╡ 290e2323-7062-48ed-a252-7ea7bb043734
+ viz_τ_prior(τ_prior_1)
+
 # ╔═╡ 6c797a4b-f692-4312-b434-a662f5c41343
-function viz_fit_τ(data::DataFrame, fixed_params::NamedTuple, chain::Chains)
+function viz_fit_τ(data::DataFrame, fixed_params::NamedTuple, chain::Chains, with_soln::Bool)
 	max_t = maximum(data[:, "t [min]"])
     t = range(0.0, maximum(data[:, "t [min]"])*1.05, length=200)
 
@@ -119,25 +195,44 @@ function viz_fit_τ(data::DataFrame, fixed_params::NamedTuple, chain::Chains)
 	fig = Figure()
 	ax  = Axis(fig[1, 1], 
 		       xlabel="time, t [min]",
-		       ylabel="temperature [°C]",
-               xtickalign=1, ytickalign=1
+		       ylabel="temperature [°C]"
 	)
-	hlines!(ax, fixed_params.Tₐ, style=:dash, 
-		    linestyle=:dot, label="θ∞", color=Cycled(3))
-	lines!(t, T_model.(t, τ.μ, fixed_params.T₀, fixed_params.Tₐ),
-        label="model", color=my_colors[2])
-	band!(t, T_model.(t, τ.lb, fixed_params.T₀, fixed_params.Tₐ), 
-		     T_model.(t, τ.ub, fixed_params.T₀, fixed_params.Tₐ), 
-		color=(my_colors[6], 0.25))
-	scatter!(data[:, "t [min]"], data[:, "T [°C]"], 
-		label="{(tᵢ, θᵢ)}", strokewidth=1)
+	if with_soln
+		hlines!(ax, fixed_params.Tₐ, style=:dash, 
+			    linestyle=:dot, color=the_colors["air"])
+	else
+		hlines!(ax, fixed_params.Tₐ, style=:dash, 
+			    linestyle=:dot, label="θᵃⁱʳ", color=the_colors["air"])
+	end
+
+	vlines!(ax, [0.0], color=("gray", 0.5), linewidth=1)
+	if with_soln
+		scatter!(data[:, "t [min]"], data[:, "T [°C]"], 
+		 strokewidth=1, color=the_colors["data"])
+		lines!(t, T_model.(t, sample(chain, 1)[:τ][1], 
+			fixed_params.T₀, fixed_params.Tₐ),
+        	label="θ(t; τ)", color=(the_colors["model"], 0.1))
+		for row in eachrow(DataFrame(sample(chain, 250, replace=false)))
+			lines!(t, T_model.(t, row[:τ], fixed_params.T₀, fixed_params.Tₐ),
+	        	color=(the_colors["model"], 0.1))
+		end
+		# lines!(t, T_model.(t, τ.μ, fixed_params.T₀, fixed_params.Tₐ),
+  #       	label="θ(t; τ̂)", color=the_colors["model"])
+	else
+		scatter!(data[:, "t [min]"], data[:, "T [°C]"], 
+			label="{(tᵢ, θᵢ)}", strokewidth=1, color=the_colors["data"])
+	end
 	axislegend(position=:rb)
+	ylims!(5, 20.0)
 	xlims!(-0.03*max_t, 1.03*max_t)
 	fig
 end
 
 # ╔═╡ 38bf810d-b588-426c-81e7-a036ea7083f3
-viz_fit_τ(data, fixed_params, chain_τ)
+viz_fit_τ(data, fixed_params, chain_τ, false)
+
+# ╔═╡ e9941f5b-6490-4e04-aa36-32f7ac3d45f1
+viz_fit_τ(data, fixed_params, chain_τ, true)
 
 # ╔═╡ 02bef073-47ae-4b55-9420-d351220018ae
 md"# illustrate direct problem"
@@ -146,6 +241,8 @@ md"# illustrate direct problem"
 τ̄ = analyze_posterior(chain_τ, :τ).μ
 
 # ╔═╡ 0a5daf81-8840-47d6-bda2-ebf0109f35ed
+# ╠═╡ disabled = true
+#=╠═╡
 begin
 	function direct_problem_toy_viz(data, fixed_params, τ, δ; show_soln=true)
 		t = range(0.0, 550.0, length=100)
@@ -173,6 +270,7 @@ begin
 	
 	direct_problem_toy_viz(data, fixed_params, τ̄, 0.5, show_soln=true)
 end
+  ╠═╡ =#
 
 # ╔═╡ d8e026b9-8943-437e-a08b-2395de35d705
 md"# inverse problem"
@@ -202,7 +300,7 @@ fixed_params2 = (T₀=load("data_run_$other_run.jld2")["T₀"],
 	end
     # σ ~ Normal(σ_prior.μ, 20 * σ_prior.σ^2) # °C
 	σ ~ Uniform(0, 0.5)
-	τ ~ Normal(τ_prior.μ, τ_prior.σ^2)
+	τ ~ truncated(Normal(τ_prior.μ, τ_prior.σ^2), 0.0, nothing)
 
     # Observation
 	tᵢ = data[i_obs, "t [min]"]
@@ -228,9 +326,10 @@ function viz_posterior_T₀(chain::Chains)
 	fig = Figure()
 	ax  = Axis(fig[1, 1], 
 		xlabel="initial temperature, θ₀ [°C]", 
-		ylabel="# posterior samples")
+		ylabel="posterior density")
 	ylims!(0, nothing)
-	hist!(T₀.samples, color=my_colors[3])
+	density!(T₀.samples, color=the_colors["distn"], strokewidth=1)
+	vlines!(ax, [data2[1, "T [°C]"]], linestyle=:dash, color=the_colors["data"])
 	lines!([T₀.lb, T₀.ub], [0, 0], color="black", linewidth=10)
 	fig
 end
@@ -241,8 +340,11 @@ viz_posterior_T₀(chain_T₀)
 # ╔═╡ d959317b-3f19-495e-95ac-50a8fecd659f
 posterior_samples = DataFrame(sample(chain_T₀[[:τ, :T₀]], 300; replace=false))
 
+# ╔═╡ a2b6477e-7e7a-48ea-b894-e42882e382f8
+sample(chain_τ, 250, replace=false)
+
 # ╔═╡ d592943d-2402-4857-9509-4ae74dee26c4
-function viz_fit_T₀(data::DataFrame, i_obs::Int, Tₐ::Float64, chain::Chains)
+function viz_fit_T₀(data::DataFrame, i_obs::Int, Tₐ::Float64, chain::Chains, with_soln::Bool)
 	max_t = maximum(data[:, "t [min]"])
     t = range(0.0, max_t*1.05, length=200)
 
@@ -252,16 +354,27 @@ function viz_fit_T₀(data::DataFrame, i_obs::Int, Tₐ::Float64, chain::Chains)
 	fig = Figure()
 	ax  = Axis(fig[1, 1], 
 		       xlabel="time, t [min]",
-		       ylabel="temperature [°C]",
-               xtickalign=1, ytickalign=1
+		       ylabel="temperature [°C]"
 	)
-	hlines!(ax, Tₐ, style=:dash, linestyle=:dot, label="θ∞", color=Cycled(3))
-	scatter!(data[:, "t [min]"], data[:, "T [°C]"], 
-		label="{(tᵢ, θᵢ)} (test data)", strokewidth=1, color=(:white, 0.0))
-	lines!(t, T_model.(t, τ.μ, T₀.μ, Tₐ),
-        label="model", color=my_colors[2])
-	band!(t, T_model.(t, τ.μ, T₀.lb, Tₐ), T_model.(t, τ.μ, T₀.ub, Tₐ), 
-		color=(my_colors[2], 0.25))
+	if with_soln
+		scatter!(data[:, "t [min]"], data[:, "T [°C]"], 
+			label="{(tᵢ, θᵢ)} (test data)", strokewidth=1, color=(:white, 0.0))
+	end
+	vlines!(ax, [0.0], color=("gray", 0.5), linewidth=1)
+	if with_soln
+		hlines!(ax, Tₐ, style=:dash, linestyle=:dot, color=the_colors["air"])
+	else
+		hlines!(ax, Tₐ, style=:dash, linestyle=:dot, label="θᵃⁱʳ", color=the_colors["air"])
+	end
+
+	if with_soln
+		lines!(t, T_model.(t, sample(chain, 1)[:τ][1], sample(chain, 1)[:T₀][1], fixed_params.Tₐ), label="θ(t; τ, θ₀)",
+	          color=(the_colors["model"], 0.1))
+		for row in eachrow(DataFrame(sample(chain, 250, replace=false)))
+			lines!(t, T_model.(t, row[:τ], row[:T₀], fixed_params.Tₐ),
+	        	color=(the_colors["model"], 0.1))
+		end
+	end
 	# if ! isnothing(chains)
 	# 	posterior_samples = DataFrame(sample(chain_T₀[[:τ, :T₀]], 100; replace=false))
 	# 	for row in eachrow(posterior_samples)
@@ -269,17 +382,29 @@ function viz_fit_T₀(data::DataFrame, i_obs::Int, Tₐ::Float64, chain::Chains)
  #        			color=("gray", 0.2), linestyle=:dash)
 	# 	end
 	# end
-	scatter!([data[i_obs, "t [min]"]], [data[i_obs, "T [°C]"]], 
-		label="(tₖ, θₖ) (train data)", strokewidth=1)
+	if with_soln
+		scatter!([data[i_obs, "t [min]"]], [data[i_obs, "T [°C]"]], 
+		strokewidth=1, color=the_colors["data"])
+	else
+		scatter!([data[i_obs, "t [min]"]], [data[i_obs, "T [°C]"]], 
+		label="(tₖ, θₖ)", strokewidth=1, color=the_colors["data"])
+	end
+
 	axislegend(position=:rb)
 	xlims!(-0.03*max_t, 1.03*max_t)
+	ylims!(5, 20.0)
 	fig
 end
 
 # ╔═╡ 007ae23e-7572-4075-859b-451b379be0e6
-viz_fit_T₀(data2, i_obs, fixed_params2.Tₐ, chain_T₀)
+viz_fit_T₀(data2, i_obs, fixed_params2.Tₐ, chain_T₀, false)
+
+# ╔═╡ 5b56d8fb-ac24-4ac5-82a7-a51b5a6eb73a
+viz_fit_T₀(data2, i_obs, fixed_params2.Tₐ, chain_T₀, true)
 
 # ╔═╡ db258674-540b-4f89-b782-46dcd8865bf2
+# ╠═╡ disabled = true
+#=╠═╡
 begin
 	function inverse_problem_toy_viz(data, fixed_params, τ, δ, i_obs; show_soln=true)
 		t = range(0.0, 550.0, length=100)
@@ -315,15 +440,18 @@ begin
 
 	inverse_problem_toy_viz(data2, fixed_params2, τ̄, 0.5, i_obs; show_soln=true)
 end
+  ╠═╡ =#
 
-# ╔═╡ 11382e60-7adc-48c6-a741-38a895075c6f
-
+# ╔═╡ 1e5ba0b1-c129-410c-9048-89a75210fd40
+md"## the ill-posed inverse problem"
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
+AlgebraOfGraphics = "cbdf2221-f076-402e-a563-3d30da359d67"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 ColorSchemes = "35d6a980-a343-548e-a6ea-1d62b119f2f4"
+Colors = "5ae59095-9a9b-59fe-a467-6f913c188581"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
@@ -333,8 +461,10 @@ StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 Turing = "fce5fe82-541a-59a6-adf8-730c64b5f9a0"
 
 [compat]
+AlgebraOfGraphics = "~0.6.11"
 CairoMakie = "~0.8.8"
 ColorSchemes = "~3.19.0"
+Colors = "~0.12.8"
 DataFrames = "~1.3.4"
 Distributions = "~0.25.64"
 JLD2 = "~0.4.22"
@@ -348,7 +478,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.0"
 manifest_format = "2.0"
-project_hash = "7f0bb2eadb9d0a9c8f95cdbeeb1824ca28e9fd7b"
+project_hash = "7ac76781708fcb0917b5c9a434c129bca35849c3"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra"]
@@ -402,6 +532,12 @@ deps = ["Bijectors", "Distributions", "DistributionsAD", "DocStringExtensions", 
 git-tree-sha1 = "e743af305716a527cdb3a67b31a33a7c3832c41f"
 uuid = "b5ca4192-6429-45e5-a2d9-87aec30a685c"
 version = "0.1.5"
+
+[[deps.AlgebraOfGraphics]]
+deps = ["Colors", "Dates", "Dictionaries", "FileIO", "GLM", "GeoInterface", "GeometryBasics", "GridLayoutBase", "KernelDensity", "Loess", "Makie", "PlotUtils", "PooledArrays", "RelocatableFolders", "StatsBase", "StructArrays", "Tables"]
+git-tree-sha1 = "1b99dfa6ccc27abc03ac2aee0433eb2e3c2d4d4d"
+uuid = "cbdf2221-f076-402e-a563-3d30da359d67"
+version = "0.6.11"
 
 [[deps.Animations]]
 deps = ["Colors"]
@@ -650,6 +786,12 @@ git-tree-sha1 = "80c3e8639e3353e5d2912fb3a1916b8455e2494b"
 uuid = "b429d917-457f-4dbc-8f4c-0cc954292b1d"
 version = "0.4.0"
 
+[[deps.Dictionaries]]
+deps = ["Indexing", "Random", "Serialization"]
+git-tree-sha1 = "96dc5c5c8994be519ee3420953c931c55657a3f2"
+uuid = "85a47980-9c8c-11e8-2b9f-f7ca1fa99fb4"
+version = "0.3.24"
+
 [[deps.DiffResults]]
 deps = ["StaticArrays"]
 git-tree-sha1 = "c18e98cba888c6c25d1c3b048e4b3380ca956805"
@@ -661,6 +803,12 @@ deps = ["IrrationalConstants", "LogExpFunctions", "NaNMath", "Random", "SpecialF
 git-tree-sha1 = "28d605d9a0ac17118fe2c5e9ce0fbb76c3ceb120"
 uuid = "b552c78f-8df3-52c6-915a-8e097449b14b"
 version = "1.11.0"
+
+[[deps.Distances]]
+deps = ["LinearAlgebra", "SparseArrays", "Statistics", "StatsAPI"]
+git-tree-sha1 = "3258d0659f812acde79e8a74b11f17ac06d0ca04"
+uuid = "b4f34e82-e78d-54a5-968a-f98e89d6e8f7"
+version = "0.10.7"
 
 [[deps.Distributed]]
 deps = ["Random", "Serialization", "Sockets"]
@@ -718,6 +866,11 @@ deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "bad72f730e9e91c08d9427d5e8db95478a3c323d"
 uuid = "2e619515-83b5-522b-bb60-26c02a35a201"
 version = "2.4.8+0"
+
+[[deps.Extents]]
+git-tree-sha1 = "5e1e4c53fa39afe63a7d356e30452249365fba99"
+uuid = "411431e0-e8b7-467b-b5e0-f676ba4f2910"
+version = "0.1.1"
 
 [[deps.FFMPEG]]
 deps = ["FFMPEG_jll"]
@@ -820,11 +973,23 @@ version = "0.2.8"
 deps = ["Random"]
 uuid = "9fa8497b-333b-5362-9e8d-4d0656e87820"
 
+[[deps.GLM]]
+deps = ["Distributions", "LinearAlgebra", "Printf", "Reexport", "SparseArrays", "SpecialFunctions", "Statistics", "StatsBase", "StatsFuns", "StatsModels"]
+git-tree-sha1 = "039118892476c2bf045a43b88fcb75ed566000ff"
+uuid = "38e38edf-8417-5370-95a0-9cbb8c7f171a"
+version = "1.8.0"
+
 [[deps.GPUArraysCore]]
 deps = ["Adapt"]
 git-tree-sha1 = "4078d3557ab15dd9fe6a0cf6f65e3d4937e98427"
 uuid = "46192b85-c4d5-4398-a991-12ede77f4527"
 version = "0.1.0"
+
+[[deps.GeoInterface]]
+deps = ["Extents"]
+git-tree-sha1 = "fb28b5dc239d0174d7297310ef7b84a11804dfab"
+uuid = "cf35fbd7-0cd7-5166-be24-54bfbe79505f"
+version = "1.0.1"
 
 [[deps.GeometryBasics]]
 deps = ["EarCut_jll", "IterTools", "LinearAlgebra", "StaticArrays", "StructArrays", "Tables"]
@@ -896,6 +1061,11 @@ deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "87f7662e03a649cffa2e05bf19c303e168732d3e"
 uuid = "905a6f67-0a94-5f89-b386-d35d92009cd1"
 version = "3.1.2+0"
+
+[[deps.Indexing]]
+git-tree-sha1 = "ce1566720fd6b19ff3411404d4b977acd4814f9f"
+uuid = "313cdc1a-70c2-5d6a-ae34-0150d3930a38"
+version = "1.1.1"
 
 [[deps.IndirectArrays]]
 git-tree-sha1 = "012e604e1c7458645cb8b436f8fba789a51b257f"
@@ -1112,6 +1282,12 @@ version = "2.36.0+0"
 [[deps.LinearAlgebra]]
 deps = ["Libdl", "libblastrampoline_jll"]
 uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+
+[[deps.Loess]]
+deps = ["Distances", "LinearAlgebra", "Statistics"]
+git-tree-sha1 = "46efcea75c890e5d820e670516dc156689851722"
+uuid = "4345ca2d-374a-55d4-8d30-97f9976e7612"
+version = "0.5.4"
 
 [[deps.LogExpFunctions]]
 deps = ["ChainRulesCore", "ChangesOfVariables", "DocStringExtensions", "InverseFunctions", "IrrationalConstants", "LinearAlgebra"]
@@ -1546,6 +1722,11 @@ version = "0.8.2"
 deps = ["Distributed", "Mmap", "Random", "Serialization"]
 uuid = "1a1011a3-84de-559e-8e89-a11a2f7dc383"
 
+[[deps.ShiftedArrays]]
+git-tree-sha1 = "503688b59397b3307443af35cd953a13e8005c16"
+uuid = "1277b4bf-5013-50f5-be3d-901d8477a67a"
+version = "2.0.0"
+
 [[deps.Showoff]]
 deps = ["Dates", "Grisu"]
 git-tree-sha1 = "91eddf657aca81df9ae6ceb20b959ae5653ad1de"
@@ -1633,6 +1814,12 @@ deps = ["ChainRulesCore", "HypergeometricFunctions", "InverseFunctions", "Irrati
 git-tree-sha1 = "5783b877201a82fc0014cbf381e7e6eb130473a4"
 uuid = "4c63d2b9-4356-54db-8cca-17b64c39e42c"
 version = "1.0.1"
+
+[[deps.StatsModels]]
+deps = ["DataAPI", "DataStructures", "LinearAlgebra", "Printf", "REPL", "ShiftedArrays", "SparseArrays", "StatsBase", "StatsFuns", "Tables"]
+git-tree-sha1 = "2bf47edcd9156b6c2954d6687b565f221f6500ae"
+uuid = "3eaba693-59b7-5ba5-a881-562e759f1c8d"
+version = "0.6.32"
 
 [[deps.StructArrays]]
 deps = ["Adapt", "DataAPI", "StaticArrays", "Tables"]
@@ -1879,9 +2066,15 @@ version = "3.5.0+0"
 
 # ╔═╡ Cell order:
 # ╠═43bcf4b0-fbfc-11ec-0e23-bb05c02078c9
+# ╠═9e3fecac-cdee-4985-950a-19bd7dbe92c5
+# ╠═408e9992-a412-4b74-b4a8-25e566d65022
 # ╠═a081eb2c-ff46-4efa-a6cd-ee3e9209e14e
-# ╠═7f7f3c12-343c-4e19-8371-a065bb9051cb
+# ╠═8931e445-6664-4609-bfa1-9e808fbe9c09
 # ╠═a13ba151-99c1-47ae-b96e-dc90464990b6
+# ╠═ec30a9bf-8bda-4987-9f5c-abbb3b53eeca
+# ╠═1572f704-cd83-4e62-a081-50b669c8d18a
+# ╠═346d44e8-7b20-4cfa-8f22-99c4e844f56d
+# ╠═8ee1b06d-c255-4ae3-ac8b-06f7498dbf76
 # ╠═0176e392-7134-4404-94bc-0b87083fff55
 # ╠═5f462877-80cb-4ca9-ad7d-29b4b0acb07e
 # ╠═3885aa90-483b-439e-a7cb-34aadf1bc329
@@ -1889,6 +2082,7 @@ version = "3.5.0+0"
 # ╠═269ac9fa-13f3-443a-8669-e8f13d3518a6
 # ╠═d32079ef-7ebd-4645-9789-1d258b13b66f
 # ╠═b8a3fc88-6e4d-457d-8582-f6302fb206ac
+# ╠═7b8f64b9-9776-4385-a2f0-38f78d76ef79
 # ╠═ecd4ea3f-1775-4c4e-a679-f8e15eaad3f7
 # ╠═2e57666d-b3f4-451e-86fd-781217c1258d
 # ╠═bb3ae6a9-5d87-4b90-978e-8674f6c5bd99
@@ -1896,8 +2090,11 @@ version = "3.5.0+0"
 # ╠═90b568ea-62a7-45e7-bcbb-29a03bb71f48
 # ╠═a1e622ae-7672-4ca2-bac2-7dcc0a500f1f
 # ╠═294e240f-c146-4ef3-b172-26e70ad3ed19
+# ╠═25b9bccd-0556-4075-a1e9-db9b3d31b3fe
+# ╠═290e2323-7062-48ed-a252-7ea7bb043734
 # ╠═6c797a4b-f692-4312-b434-a662f5c41343
 # ╠═38bf810d-b588-426c-81e7-a036ea7083f3
+# ╠═e9941f5b-6490-4e04-aa36-32f7ac3d45f1
 # ╟─02bef073-47ae-4b55-9420-d351220018ae
 # ╠═42690c6c-af94-4051-8472-fc7fab9d1d82
 # ╠═0a5daf81-8840-47d6-bda2-ebf0109f35ed
@@ -1914,9 +2111,11 @@ version = "3.5.0+0"
 # ╠═282f22da-b95a-41b2-a98a-12c6acd7bc06
 # ╠═bd5602cd-8b6d-430f-a700-40b449d1da27
 # ╠═d959317b-3f19-495e-95ac-50a8fecd659f
+# ╠═a2b6477e-7e7a-48ea-b894-e42882e382f8
 # ╠═d592943d-2402-4857-9509-4ae74dee26c4
 # ╠═007ae23e-7572-4075-859b-451b379be0e6
+# ╠═5b56d8fb-ac24-4ac5-82a7-a51b5a6eb73a
 # ╠═db258674-540b-4f89-b782-46dcd8865bf2
-# ╠═11382e60-7adc-48c6-a741-38a895075c6f
+# ╟─1e5ba0b1-c129-410c-9048-89a75210fd40
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
