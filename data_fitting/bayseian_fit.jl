@@ -289,7 +289,7 @@ T₀_prior = Uniform(0.0, 15.0)
 end
 
 # ╔═╡ 62c5e645-285d-470e-b46b-00f0471b7329
-i_obs = 25
+i_obs = 25 #35
 
 # ╔═╡ efdf4047-81ab-45db-9980-267df2bad314
 model_T₀ = identify_T₀(data2, i_obs, fixed_params2.Tₐ)
@@ -340,6 +340,8 @@ function viz_fit_T₀_prior()
 		lines!(t, T_model.(t, τ, T₀, fixed_params.Tₐ),
 	        	color=(the_colors["model"], 0.1))
 	end
+	xlims!(-0.03*max_t, 1.03*max_t)
+	ylims!(0, 20.0)
 	save("prior_theta_0.pdf", fig)
 	return fig
 end
@@ -379,13 +381,6 @@ function viz_fit_T₀(data::DataFrame, i_obs::Int, Tₐ::Float64, chain::Chains,
 	        	color=(the_colors["model"], 0.1))
 		end
 	end
-	# if ! isnothing(chains)
-	# 	posterior_samples = DataFrame(sample(chain_T₀[[:τ, :T₀]], 100; replace=false))
-	# 	for row in eachrow(posterior_samples)
-	# 		lines!(t, T_model.(t, row[:τ], row[:T₀], params.Tₐ),
- #        			color=("gray", 0.2), linestyle=:dash)
-	# 	end
-	# end
 	if with_soln
 		scatter!([data[i_obs, "t [min]"]], [data[i_obs, "T [°C]"]], 
 		strokewidth=1, color=the_colors["data"])
@@ -396,7 +391,7 @@ function viz_fit_T₀(data::DataFrame, i_obs::Int, Tₐ::Float64, chain::Chains,
 
 	axislegend(position=:rb)
 	xlims!(-0.03*max_t, 1.03*max_t)
-	ylims!(5, 20.0)
+	ylims!(0, 20.0)
 	save("find_theta_zero_i_obs_$(i_obs)_" * (with_soln ? "_soln" : "_data") * ".pdf", fig)
 
 	fig
