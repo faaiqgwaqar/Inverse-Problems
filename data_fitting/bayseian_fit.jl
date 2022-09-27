@@ -24,7 +24,7 @@ begin
 		linewidth=4,
 		markersize=14,
 		titlefont=aog.firasans("Light"),
-		resolution=(500, 380)
+		resolution=(0.9*500, 0.9*380)
 	)
 end
 
@@ -143,6 +143,44 @@ function analyze_posterior(chain::Chains, param::Symbol)
 	return (;μ=μ, σ=σ, lb=lb, ub=ub, samples=θs)
 end
 
+# ╔═╡ a1e622ae-7672-4ca2-bac2-7dcc0a500f1f
+function viz_posterior_τ(chain::Chains, τ_prior::Distribution)
+	τ = analyze_posterior(chain, :τ)
+	
+	fig = Figure()
+	ax  = Axis(fig[1, 1], 
+		       xlabel="time constant, τ [min]", 
+		       ylabel="posterior density",
+			   yticks=[0]
+	)
+	ylims!(0, nothing)
+
+	# prior inset
+    inset_box = Axis(fig, bbox=BBox(300, 400, 200, 300), xlabel="τ [min]", ylabel="prior density", yticks=[0])
+    # bring content upfront
+    translate!(inset_box.scene, 0, 0, 10)
+	τs = range(0.0, 250.0, length=100)
+	τs = vcat(τs, [τ_prior.b-0.001, τ_prior.b+0.001])
+	sort!(τs)
+	ρ_τ_prior = [pdf(τ_prior, τ) for τ in τs]
+	lines!(inset_box, τs, ρ_τ_prior, color=:black, linewidth=1)
+	band!(inset_box, τs, zeros(length(τs)), ρ_τ_prior, 
+		color=(the_colors["distn2"], 0.4))
+	vlines!(inset_box, [0.0], color=("gray", 0.5), linewidth=1)
+	ylims!(inset_box, 0, maximum(ρ_τ_prior)*2)
+
+	# posterior
+	density!(ax, τ.samples, color=(the_colors["distn"], 0.4), strokewidth=1)
+	lines!(ax, [τ.lb, τ.ub], [0, 0], color="black", linewidth=10)
+	xlims!(ax, 60, 70)
+	ylims!(ax, 0, 0.7)
+	save("posterior_tau.pdf", fig)
+	fig
+end
+
+# ╔═╡ 294e240f-c146-4ef3-b172-26e70ad3ed19
+viz_posterior_τ(chain_τ, τ_prior_1)
+
 # ╔═╡ 1b8c1891-c648-466e-a1f2-b1b8f7b09f70
 function bogus_density_for_legend()
 	fig_ignore = Figure()
@@ -151,41 +189,6 @@ function bogus_density_for_legend()
 		color=(the_colors["distn2"], 0.5), strokewidth=1)
 	return d_ignore
 end
-
-# ╔═╡ a1e622ae-7672-4ca2-bac2-7dcc0a500f1f
-function viz_posterior_τ(chain::Chains, τ_prior::Distribution)
-	τ = analyze_posterior(chain, :τ)
-
-	d_ignore = bogus_density_for_legend()
-	
-	fig = Figure()
-	ax  = Axis(fig[1, 1], 
-		       xlabel="time constant, τ [min]", 
-		       ylabel="posterior density")
-	ylims!(0, nothing)
-
-	# # prior, in inset
-	# ax2 = Axis(fig[1, 1], 
-	# 	width=Relative(0.2), height=Relative(0.3), 
-	# 	halign=0.1, valign=0.1)
-	# τs = range(0.0, 250.0, length=100)
-	# τs = vcat(τs, [τ_prior.b-0.001, τ_prior.b+0.001])
-	# sort!(τs)
-	# ρ_τ_prior = [pdf(τ_prior, τ) for τ in τs]
-	# lines!(τs, ρ_τ_prior, color=:black, linewidth=1)
-	# band!(τs, zeros(length(τs)), ρ_τ_prior, 
-	# 	color=(the_colors["distn2"], 0.4))
-	# posterior
-	density!(τ.samples, color=(the_colors["distn"], 0.4), strokewidth=1)
-	lines!([τ.lb, τ.ub], [0, 0], color="black", linewidth=10)
-	xlims!(60, 70)
-	ylims!(0, 0.7)
-	save("posterior_tau.pdf", fig)
-	fig
-end
-
-# ╔═╡ 294e240f-c146-4ef3-b172-26e70ad3ed19
-viz_posterior_τ(chain_τ, τ_prior_1)
 
 # ╔═╡ 25b9bccd-0556-4075-a1e9-db9b3d31b3fe
 function viz_τ_prior(τ_prior_1::Distribution, fixed_params::NamedTuple)
@@ -334,7 +337,8 @@ function viz_posterior_T₀(chain::Chains, i_obs::Int, T₀_prior::Distribution)
 	fig = Figure()
 	ax  = Axis(fig[1, 1], 
 		xlabel="initial temperature, θ₀ [°C]",
-		ylabel="density"
+		ylabel="density",
+		yticks=[0]
 	)
 	ylims!(0, nothing)
 	# prior
@@ -545,7 +549,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.0"
 manifest_format = "2.0"
-project_hash = "7ea012fd22238905322ebf9bb6bf8cb71d4f8f13"
+project_hash = "4c352831497078f356299d45bc78fde35ab28632"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra"]
