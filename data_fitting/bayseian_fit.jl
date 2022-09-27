@@ -16,6 +16,12 @@ TableOfContents()
 # ╔═╡ 9e3fecac-cdee-4985-950a-19bd7dbe92c5
 import AlgebraOfGraphics as aog
 
+# ╔═╡ ad610936-99a3-42a1-800d-94e66051f605
+import ScikitLearn as skl
+
+# ╔═╡ cbd53ba5-34f0-42fc-8ac1-386a72e23e13
+skl.@sk_import neighbors: KernelDensity
+
 # ╔═╡ 408e9992-a412-4b74-b4a8-25e566d65022
 begin
 	aog.set_aog_theme!(fonts=[aog.firasans("Light"), aog.firasans("Light")])
@@ -143,6 +149,9 @@ function analyze_posterior(chain::Chains, param::Symbol)
 	return (;μ=μ, σ=σ, lb=lb, ub=ub, samples=θs)
 end
 
+# ╔═╡ d9bb0d85-8a08-405c-b1b3-7b0f96d978f4
+inset_bbox = BBox(320, 420, 200, 300)
+
 # ╔═╡ a1e622ae-7672-4ca2-bac2-7dcc0a500f1f
 function viz_posterior_τ(chain::Chains, τ_prior::Distribution)
 	τ = analyze_posterior(chain, :τ)
@@ -156,8 +165,11 @@ function viz_posterior_τ(chain::Chains, τ_prior::Distribution)
 	ylims!(0, nothing)
 
 	# prior inset
-    inset_box = Axis(fig, bbox=BBox(300, 400, 200, 300), xlabel="τ [min]", ylabel="prior density", yticks=[0])
-    # bring content upfront
+    inset_box = Axis(fig, 
+		             bbox=inset_bbox, 
+		             xlabel="τ [min]", 
+		             ylabel="prior density", 
+		             yticks=[0])
     translate!(inset_box.scene, 0, 0, 10)
 	τs = range(0.0, 250.0, length=100)
 	τs = vcat(τs, [τ_prior.b-0.001, τ_prior.b+0.001])
@@ -180,15 +192,6 @@ end
 
 # ╔═╡ 294e240f-c146-4ef3-b172-26e70ad3ed19
 viz_posterior_τ(chain_τ, τ_prior_1)
-
-# ╔═╡ 1b8c1891-c648-466e-a1f2-b1b8f7b09f70
-function bogus_density_for_legend()
-	fig_ignore = Figure()
-	ax_ignore  = Axis(fig_ignore[1, 1])
-	d_ignore = density!(rand(29), 
-		color=(the_colors["distn2"], 0.5), strokewidth=1)
-	return d_ignore
-end
 
 # ╔═╡ 25b9bccd-0556-4075-a1e9-db9b3d31b3fe
 function viz_τ_prior(τ_prior_1::Distribution, fixed_params::NamedTuple)
@@ -330,36 +333,42 @@ chain_T₀ = sample(model_T₀, NUTS(), 5_000; progress=true)
 # ╔═╡ 282f22da-b95a-41b2-a98a-12c6acd7bc06
 function viz_posterior_T₀(chain::Chains, i_obs::Int, T₀_prior::Distribution)
 	T₀ = analyze_posterior(chain_T₀, :T₀)
-
-	# hack for legend.
-	d_ignore = bogus_density_for_legend()
 	
 	fig = Figure()
 	ax  = Axis(fig[1, 1], 
 		xlabel="initial temperature, θ₀ [°C]",
-		ylabel="density",
+		ylabel="posterior density",
 		yticks=[0]
 	)
 	ylims!(0, nothing)
-	# prior
-	θ₀s = range(0.0, 16.0, length=100)
+	# prior inset
+	inset_box = Axis(fig, 
+		             bbox=inset_bbox, 
+		             xlabel="θ₀ [°C]", 
+		             ylabel="prior density", 
+		             yticks=[0])
+    translate!(inset_box.scene, 0, 0, 10)
+	θ₀s = range(-1.0, 16.0, length=100)
 	θ₀s = vcat(θ₀s, [-0.001, 0.001, 14.9999, 15.0001])
 	sort!(θ₀s)
 	ρ_θ₀_prior = [pdf(T₀_prior, θ₀) for θ₀ in θ₀s]
-	lines!(θ₀s, ρ_θ₀_prior, color=:black, linewidth=1)
-	band!(θ₀s, zeros(length(θ₀s)), ρ_θ₀_prior, 
+	lines!(inset_box, θ₀s, ρ_θ₀_prior, color=:black, linewidth=1)
+	band!(inset_box, θ₀s, zeros(length(θ₀s)), ρ_θ₀_prior, 
 		color=(the_colors["distn2"], 0.4), direction=:y)
+	vlines!(inset_box, [0.0], color=("gray", 0.5), linewidth=1)
+	ylims!(inset_box, 0, maximum(ρ_θ₀_prior)*2)
+
 	# posterior
-	d = density!(T₀.samples, 
+	d = density!(ax, T₀.samples, 
 		color=(the_colors["distn"], 0.4), strokewidth=1, label="posterior")
 	# truth
 	vl = vlines!(ax, [data2[1, "T [°C]"]], linestyle=:dash, color=the_colors["data"])
 	# confidence interval
-	lines!([T₀.lb, T₀.ub], zeros(2), color="black", linewidth=10)
+	lines!(ax, [T₀.lb, T₀.ub], zeros(2), color="black", linewidth=10)
 	vlines!(ax, [0.0], color=("gray", 0.5), linewidth=1)
-
-	axislegend(ax, [d_ignore, d, vl], ["prior", "posterior", "true θ₀"], position=:rt)
-	xlims!(-1, 16)
+	for _ax in [ax, inset_box]
+		xlims!(_ax, -0.5, 15.5)
+	end
 	save("posterior_theta_zero_i_obs_$(i_obs).pdf", fig)
 	fig
 end
@@ -463,11 +472,11 @@ t₀_prior = Uniform(-15, 15)
 	end
 	σ ~ σ_prior2
 	τ ~ τ_prior2
-	tₒ ~ t₀_prior
+	t₀ ~ t₀_prior
 
     # Observation
 	tᵢ = data[i_obs, "t [min]"]
-	μ = T_model(tᵢ, τ, T₀, Tₐ, tₒ)
+	μ = T_model(tᵢ, τ, T₀, Tₐ, t₀)
 	data[i_obs, "T [°C]"] ~ Normal(μ, σ)
 
     return nothing
@@ -514,6 +523,121 @@ end
 # ╔═╡ cc42f6f3-22f0-4d41-a22e-fb02767b80a5
 viz_fit_T₀_t₀_prior(τ_prior2, T₀_prior, t₀_prior, fixed_params2)
 
+# ╔═╡ 0fc9e0b0-bddc-4d07-a6ce-35cb2c4d6c79
+function band_direction_y!(ax, x, bot, top, color)
+	band!(ax, [Point2(top[i], x[i]) for i = 1:length(x)],
+		      [Point2(bot[i], x[i]) for i = 1:length(x)], color=color
+	)
+end
+
+# ╔═╡ 63041d56-e6de-481a-8fcd-c8f4f6a88c27
+contour(rand(10,10), colormap=ColorSchemes.buda)
+
+# ╔═╡ 5521a857-16c1-461a-b924-3f6e32e09f1a
+function viz_T₀_t₀_distn(T₀_prior::Distribution, 
+	                     t₀_prior::Distribution, 
+	                     chain_T₀_t₀::Chains, 
+	                     posterior_or_prior::String)
+	the_colormaps = Dict(
+		"posterior" => range(RGB(1.0, 1.0, 1.0), 
+			RGB(the_colors["distn"].r,the_colors["distn"].g,the_colors["distn"].b)
+		),
+		"prior" => range(RGB(1.0, 1.0, 1.0), 
+			RGB(the_colors["distn2"].r,the_colors["distn2"].g,the_colors["distn2"].b)
+		),
+	)
+	
+	fig = Figure()
+	gl = fig[1, 1] = GridLayout()
+	ax_t = Axis(fig[1, 1], ylabel="density", yticks=[0])
+	ax  = Axis(fig[2, 1], xlabel="t₀ [min]", ylabel="T₀ [°C]")
+	ax_r = Axis(fig[2, 2], xlabel="density", xticks=[0])
+	linkyaxes!(ax_r, ax)
+	linkxaxes!(ax_t, ax)
+	hidexdecorations!(ax_t)
+	hideydecorations!(ax_r)
+
+	t̂₀ = analyze_posterior(chain_T₀_t₀, :t₀)
+	T̂₀ = analyze_posterior(chain_T₀_t₀, :T₀)
+	
+	ϵ = 0.001
+	t₀s = range(t₀_prior.a-ϵ, t₀_prior.b+ϵ, length=100)
+	T₀s = range(T₀_prior.a-ϵ, T₀_prior.b+ϵ, length=101)
+	
+	kde = KernelDensity()
+	kde.fit(Matrix(DataFrame(chain_T₀_t₀)[:, [:t₀, :T₀]]))
+
+	ρs = zeros(length(T₀s), length(t₀s))
+	for (i, t₀) in enumerate(t₀s)
+		for (j, T₀) in enumerate(T₀s)
+			if posterior_or_prior == "posterior" # employ KDE
+				ρs[j, i] = exp(kde.score_samples([[t₀, T₀]])[1])
+			elseif posterior_or_prior == "prior"
+				ρs[j, i] = pdf(T₀_prior, T₀) * pdf(t₀_prior, t₀)
+			end
+		end
+	end
+
+	contourf!(ax, t₀s, T₀s, ρs', linewidth=1, 
+		colormap=the_colormaps[posterior_or_prior], extendhigh=the_colors["distn2"])
+
+	# marginals
+	marginal_color = (the_colors[posterior_or_prior == "posterior" ? "distn" : "distn2"], 0.4)
+	if posterior_or_prior == "posterior" # employ KDE
+		density!(ax_t, DataFrame(chain_T₀_t₀)[:, :t₀], 
+			color=marginal_color, strokewidth=1)
+		density!(ax_r, DataFrame(chain_T₀_t₀)[:, :T₀], 
+			direction=:y, color=marginal_color, strokewidth=1)
+	elseif posterior_or_prior == "prior"
+		
+		# t₀
+		t₀s = [t₀_prior.a - ϵ, t₀_prior.a + ϵ, t₀_prior.b - ϵ, t₀_prior.b + ϵ]
+		ρ_t₀_prior = [pdf(t₀_prior, t₀) for t₀ in t₀s]
+		lines!(ax_t, t₀s, ρ_t₀_prior, color=:black, linewidth=1)
+		band!(ax_t, t₀s, zeros(length(t₀s)), ρ_t₀_prior, 
+				color=(the_colors["distn2"], 0.4))
+		# T₀
+		T₀s = [T₀_prior.a - ϵ, T₀_prior.a + ϵ, T₀_prior.b - ϵ, T₀_prior.b + ϵ]
+		ρ_T₀_prior = [pdf(T₀_prior, T₀) for T₀ in T₀s]
+		lines!(ax_r, ρ_T₀_prior, T₀s, color=:black, linewidth=1)
+		band_direction_y!(ax_r, T₀s, 
+			   zeros(length(T₀s)), ρ_T₀_prior, (the_colors["distn2"], 0.4))
+	end
+	# m∞_interval = [percentile(posterior_samples[:, "m∞"], p) for p in [5.0, 95.0]] 
+	# τ_interval  = [percentile(posterior_samples[:, "τ"], p) for p in [5.0, 95.0]] 
+	
+	# lines!(ax_t, m∞_interval, zeros(2), color=:black, linewidth=10)
+	# lines!(ax_r, zeros(2), τ_interval, color=:black, linewidth=10)
+	
+	# scatter!(ax, [m̂∞], [τ̂], marker=:cross, color=ColorSchemes.viridis[end])
+	
+	# ylims!(ax, 0, nothing)
+	# xlims!(ax, 0, 150.0)
+	# ylims!(ax_t, 0, nothing)
+	xlims!(ax_r, 0, nothing)
+	ylims!(ax_t, 0, nothing)
+
+	colgap!(gl, 5)
+	rowgap!(gl, 5)
+	xlims!(ax, minimum(t₀s), maximum(t₀s))
+	ylims!(ax, minimum(T₀s), maximum(T₀s))
+	rowsize!(fig.layout, 1, Relative(.225))
+	colsize!(fig.layout, 2, Relative(.2))
+	# if ! isnothing(savename)
+	#     save(savename * "_i_obs$(bayes_res.i_obs).pdf", fig)
+	# end
+	fig
+end
+
+# ╔═╡ c0169bed-f7fe-40cc-b13a-0c3f0fc46762
+viz_T₀_t₀_distn(T₀_prior, t₀_prior, chain_T₀_t₀, "posterior")
+
+# ╔═╡ 2c0baf1c-ce11-43fb-809b-5e8a48902215
+viz_T₀_t₀_distn(T₀_prior, t₀_prior, chain_T₀_t₀, "prior")
+
+# ╔═╡ 3cfa5ffb-9c35-4b2a-9cee-ee2835cb4461
+chain_T₀_t₀
+
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
@@ -527,6 +651,7 @@ JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+ScikitLearn = "3646fa90-6ef7-5e7e-9f22-8aca16db6324"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 Turing = "fce5fe82-541a-59a6-adf8-730c64b5f9a0"
 
@@ -539,6 +664,7 @@ DataFrames = "~1.3.4"
 Distributions = "~0.25.64"
 JLD2 = "~0.4.22"
 PlutoUI = "~0.7.43"
+ScikitLearn = "~0.6.4"
 StatsBase = "~0.33.18"
 Turing = "~0.21.9"
 """
@@ -549,7 +675,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.0"
 manifest_format = "2.0"
-project_hash = "4c352831497078f356299d45bc78fde35ab28632"
+project_hash = "3a94cf6dcea3fa7dcf7c132dc202a5a7887093c4"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra"]
@@ -798,6 +924,12 @@ version = "0.5.2+0"
 git-tree-sha1 = "455419f7e328a1a2493cabc6428d79e951349769"
 uuid = "a33af91c-f02d-484b-be07-31d278c5ca2b"
 version = "0.1.1"
+
+[[deps.Conda]]
+deps = ["Downloads", "JSON", "VersionParsing"]
+git-tree-sha1 = "6e47d11ea2776bc5627421d59cdcc1296c058071"
+uuid = "8f4d0f93-b110-5947-807f-2305c1781a2d"
+version = "1.7.0"
 
 [[deps.ConsoleProgressMonitor]]
 deps = ["Logging", "ProgressMeter"]
@@ -1621,6 +1753,12 @@ git-tree-sha1 = "3a121dfbba67c94a5bec9dde613c3d0cbcf3a12b"
 uuid = "36c8627f-9965-5494-a995-c6b170f724f3"
 version = "1.50.3+0"
 
+[[deps.Parameters]]
+deps = ["OrderedCollections", "UnPack"]
+git-tree-sha1 = "34c0e9ad262e5f7fc75b10a9952ca7692cfc5fbe"
+uuid = "d96e819e-fc66-5662-9728-84c9c7592b0a"
+version = "0.12.3"
+
 [[deps.Parsers]]
 deps = ["Dates"]
 git-tree-sha1 = "0044b23da09b5608b4ecacb4e5e6c6332f833a7e"
@@ -1694,6 +1832,12 @@ deps = ["Distributed", "Printf"]
 git-tree-sha1 = "d7a7aef8f8f2d537104f170139553b14dfe39fe9"
 uuid = "92933f4c-e287-5a05-a399-4b506db050ca"
 version = "1.7.2"
+
+[[deps.PyCall]]
+deps = ["Conda", "Dates", "Libdl", "LinearAlgebra", "MacroTools", "Serialization", "VersionParsing"]
+git-tree-sha1 = "53b8b07b721b77144a0fbbbc2675222ebf40a02d"
+uuid = "438e738f-606a-5dbb-bf0a-cddfbfd45ab0"
+version = "1.94.1"
 
 [[deps.QOI]]
 deps = ["ColorTypes", "FileIO", "FixedPointNumbers"]
@@ -1803,6 +1947,18 @@ version = "1.42.2"
 git-tree-sha1 = "a8e18eb383b5ecf1b5e6fc237eb39255044fd92b"
 uuid = "30f210dd-8aff-4c5f-94ba-8e64358c1161"
 version = "3.0.0"
+
+[[deps.ScikitLearn]]
+deps = ["Compat", "Conda", "DataFrames", "Distributed", "IterTools", "LinearAlgebra", "MacroTools", "Parameters", "Printf", "PyCall", "Random", "ScikitLearnBase", "SparseArrays", "StatsBase", "VersionParsing"]
+git-tree-sha1 = "ccb822ff4222fcf6ff43bbdbd7b80332690f168e"
+uuid = "3646fa90-6ef7-5e7e-9f22-8aca16db6324"
+version = "0.6.4"
+
+[[deps.ScikitLearnBase]]
+deps = ["LinearAlgebra", "Random", "Statistics"]
+git-tree-sha1 = "7877e55c1523a4b336b433da39c8e8c08d2f221f"
+uuid = "6e75b9c4-186b-50bd-896f-2d2496a4843e"
+version = "0.5.0"
 
 [[deps.Scratch]]
 deps = ["Dates"]
@@ -2029,6 +2185,11 @@ git-tree-sha1 = "53915e50200959667e78a92a418594b428dffddf"
 uuid = "1cfade01-22cf-5700-b092-accc4b62d6e1"
 version = "0.4.1"
 
+[[deps.VersionParsing]]
+git-tree-sha1 = "58d6e80b4ee071f5efd07fda82cb9fbe17200868"
+uuid = "81def892-9a0e-5fdd-b105-ffc91e053289"
+version = "1.3.0"
+
 [[deps.WoodburyMatrices]]
 deps = ["LinearAlgebra", "SparseArrays"]
 git-tree-sha1 = "de67fa59e33ad156a590055375a30b23c40299d3"
@@ -2175,6 +2336,8 @@ version = "3.5.0+0"
 # ╠═43bcf4b0-fbfc-11ec-0e23-bb05c02078c9
 # ╠═edb44636-d6d4-400f-adc4-75b287a1f993
 # ╠═9e3fecac-cdee-4985-950a-19bd7dbe92c5
+# ╠═ad610936-99a3-42a1-800d-94e66051f605
+# ╠═cbd53ba5-34f0-42fc-8ac1-386a72e23e13
 # ╠═408e9992-a412-4b74-b4a8-25e566d65022
 # ╠═a081eb2c-ff46-4efa-a6cd-ee3e9209e14e
 # ╠═8931e445-6664-4609-bfa1-9e808fbe9c09
@@ -2195,9 +2358,9 @@ version = "3.5.0+0"
 # ╠═2e57666d-b3f4-451e-86fd-781217c1258d
 # ╠═bb3ae6a9-5d87-4b90-978e-8674f6c5bd99
 # ╠═ff7e4fd8-e34b-478e-ab8a-2f35aba99ba6
+# ╠═d9bb0d85-8a08-405c-b1b3-7b0f96d978f4
 # ╠═a1e622ae-7672-4ca2-bac2-7dcc0a500f1f
 # ╠═294e240f-c146-4ef3-b172-26e70ad3ed19
-# ╠═1b8c1891-c648-466e-a1f2-b1b8f7b09f70
 # ╠═25b9bccd-0556-4075-a1e9-db9b3d31b3fe
 # ╠═290e2323-7062-48ed-a252-7ea7bb043734
 # ╠═6c797a4b-f692-4312-b434-a662f5c41343
@@ -2229,5 +2392,11 @@ version = "3.5.0+0"
 # ╠═14bee7d1-dadc-41be-9ea0-1420cd68a121
 # ╠═efd049ee-f3eb-496a-959c-f8ee3ad6c4e4
 # ╠═cc42f6f3-22f0-4d41-a22e-fb02767b80a5
+# ╠═0fc9e0b0-bddc-4d07-a6ce-35cb2c4d6c79
+# ╠═63041d56-e6de-481a-8fcd-c8f4f6a88c27
+# ╠═5521a857-16c1-461a-b924-3f6e32e09f1a
+# ╠═c0169bed-f7fe-40cc-b13a-0c3f0fc46762
+# ╠═2c0baf1c-ce11-43fb-809b-5e8a48902215
+# ╠═3cfa5ffb-9c35-4b2a-9cee-ee2835cb4461
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
