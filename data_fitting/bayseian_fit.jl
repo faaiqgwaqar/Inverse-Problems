@@ -32,10 +32,11 @@ end
 my_colors = aog.wongcolors()
 
 # ╔═╡ 8931e445-6664-4609-bfa1-9e808fbe9c09
-the_colors = Dict("air"   => my_colors[1], 
-	              "data"  => my_colors[2],
-	              "distn" => my_colors[7], 
-	              "model" => my_colors[3])
+the_colors = Dict("air"    => my_colors[1], 
+	              "data"   => my_colors[2],
+	              "distn"  => my_colors[7], 
+	              "distn2" => my_colors[4],
+	              "model"  => my_colors[3])
 
 # ╔═╡ 3ae0b235-5ade-4c30-89ac-7f0480c0da11
 md"## the forward model"
@@ -142,26 +143,52 @@ function analyze_posterior(chain::Chains, param::Symbol)
 	return (;μ=μ, σ=σ, lb=lb, ub=ub, samples=θs)
 end
 
+# ╔═╡ 1b8c1891-c648-466e-a1f2-b1b8f7b09f70
+function bogus_density_for_legend()
+	fig_ignore = Figure()
+	ax_ignore  = Axis(fig_ignore[1, 1])
+	d_ignore = density!(rand(29), 
+		color=(the_colors["distn2"], 0.5), strokewidth=1)
+	return d_ignore
+end
+
 # ╔═╡ a1e622ae-7672-4ca2-bac2-7dcc0a500f1f
-function viz_posterior_τ(chain::Chains)
+function viz_posterior_τ(chain::Chains, τ_prior::Distribution)
 	τ = analyze_posterior(chain, :τ)
+
+	d_ignore = bogus_density_for_legend()
 	
 	fig = Figure()
 	ax  = Axis(fig[1, 1], 
 		       xlabel="time constant, τ [min]", 
 		       ylabel="posterior density")
 	ylims!(0, nothing)
-	density!(τ.samples, color=the_colors["distn"], strokewidth=1)
+
+	# # prior, in inset
+	# ax2 = Axis(fig[1, 1], 
+	# 	width=Relative(0.2), height=Relative(0.3), 
+	# 	halign=0.1, valign=0.1)
+	# τs = range(0.0, 250.0, length=100)
+	# τs = vcat(τs, [τ_prior.b-0.001, τ_prior.b+0.001])
+	# sort!(τs)
+	# ρ_τ_prior = [pdf(τ_prior, τ) for τ in τs]
+	# lines!(τs, ρ_τ_prior, color=:black, linewidth=1)
+	# band!(τs, zeros(length(τs)), ρ_τ_prior, 
+	# 	color=(the_colors["distn2"], 0.4))
+	# posterior
+	density!(τ.samples, color=(the_colors["distn"], 0.4), strokewidth=1)
 	lines!([τ.lb, τ.ub], [0, 0], color="black", linewidth=10)
+	xlims!(60, 70)
+	ylims!(0, 0.7)
 	save("posterior_tau.pdf", fig)
 	fig
 end
 
 # ╔═╡ 294e240f-c146-4ef3-b172-26e70ad3ed19
-viz_posterior_τ(chain_τ)
+viz_posterior_τ(chain_τ, τ_prior_1)
 
 # ╔═╡ 25b9bccd-0556-4075-a1e9-db9b3d31b3fe
-function viz_τ_prior(τ_prior_1::Distribution)
+function viz_τ_prior(τ_prior_1::Distribution, fixed_params::NamedTuple)
 	max_t = maximum(data[:, "t [min]"])
     t = range(0.0, maximum(data[:, "t [min]"])*1.05, length=200)
 	
@@ -186,7 +213,7 @@ function viz_τ_prior(τ_prior_1::Distribution)
 end
 
 # ╔═╡ 290e2323-7062-48ed-a252-7ea7bb043734
- viz_τ_prior(τ_prior_1)
+ viz_τ_prior(τ_prior_1, fixed_params)
 
 # ╔═╡ 6c797a4b-f692-4312-b434-a662f5c41343
 function viz_fit_τ(data::DataFrame, 
@@ -271,7 +298,7 @@ end
 T₀_prior = Uniform(0.0, 15.0)
 
 # ╔═╡ 8dbbbe1c-4eb6-4ac2-a447-bbaa500e03b4
-@model function identify_T₀(data, i_obs, Tₐ)
+@model function likelihood_for_T₀(data, i_obs, Tₐ)
     # Prior distributions.
 	T₀ ~ T₀_prior
 	if data[i_obs, "T [°C]"] < 10.0
@@ -292,38 +319,52 @@ end
 i_obs = 25 #35
 
 # ╔═╡ efdf4047-81ab-45db-9980-267df2bad314
-model_T₀ = identify_T₀(data2, i_obs, fixed_params2.Tₐ)
+model_T₀ = likelihood_for_T₀(data2, i_obs, fixed_params2.Tₐ)
 
 # ╔═╡ 287fd4e2-3afd-4540-be15-f2a486e36e37
 chain_T₀ = sample(model_T₀, NUTS(), 5_000; progress=true)
 
 # ╔═╡ 282f22da-b95a-41b2-a98a-12c6acd7bc06
-function viz_posterior_T₀(chain::Chains, i_obs::Int)
+function viz_posterior_T₀(chain::Chains, i_obs::Int, T₀_prior::Distribution)
 	T₀ = analyze_posterior(chain_T₀, :T₀)
+
+	# hack for legend.
+	d_ignore = bogus_density_for_legend()
 	
 	fig = Figure()
 	ax  = Axis(fig[1, 1], 
-		xlabel="initial temperature, θ₀ [°C]", 
-		ylabel="posterior density")
+		xlabel="initial temperature, θ₀ [°C]",
+		ylabel="density"
+	)
 	ylims!(0, nothing)
-	density!(T₀.samples, color=the_colors["distn"], strokewidth=1)
-	vlines!(ax, [data2[1, "T [°C]"]], linestyle=:dash, color=the_colors["data"])
-	lines!([T₀.lb, T₀.ub], [0, 0], color="black", linewidth=10)
+	# prior
+	θ₀s = range(0.0, 16.0, length=100)
+	θ₀s = vcat(θ₀s, [-0.001, 0.001, 14.9999, 15.0001])
+	sort!(θ₀s)
+	ρ_θ₀_prior = [pdf(T₀_prior, θ₀) for θ₀ in θ₀s]
+	lines!(θ₀s, ρ_θ₀_prior, color=:black, linewidth=1)
+	band!(θ₀s, zeros(length(θ₀s)), ρ_θ₀_prior, 
+		color=(the_colors["distn2"], 0.4), direction=:y)
+	# posterior
+	d = density!(T₀.samples, 
+		color=(the_colors["distn"], 0.4), strokewidth=1, label="posterior")
+	# truth
+	vl = vlines!(ax, [data2[1, "T [°C]"]], linestyle=:dash, color=the_colors["data"])
+	# confidence interval
+	lines!([T₀.lb, T₀.ub], zeros(2), color="black", linewidth=10)
+	vlines!(ax, [0.0], color=("gray", 0.5), linewidth=1)
+
+	axislegend(ax, [d_ignore, d, vl], ["prior", "posterior", "true θ₀"], position=:rt)
+	xlims!(-1, 16)
 	save("posterior_theta_zero_i_obs_$(i_obs).pdf", fig)
 	fig
 end
 
 # ╔═╡ bd5602cd-8b6d-430f-a700-40b449d1da27
-viz_posterior_T₀(chain_T₀, i_obs)
-
-# ╔═╡ d959317b-3f19-495e-95ac-50a8fecd659f
-posterior_samples = DataFrame(sample(chain_T₀[[:τ, :T₀]], 300; replace=false))
-
-# ╔═╡ a2b6477e-7e7a-48ea-b894-e42882e382f8
-sample(chain_τ, 250, replace=false)
+viz_posterior_T₀(chain_T₀, i_obs, T₀_prior)
 
 # ╔═╡ 477d2b05-1e78-41ad-99af-b0dedfef617f
-function viz_fit_T₀_prior()
+function viz_fit_T₀_prior(τ_prior2::Distribution, T₀_prior::Distribution, fixed_params2::NamedTuple)
 	max_t = maximum(data2[:, "t [min]"])
     t = range(0.0, max_t*1.05, length=200)
 
@@ -337,7 +378,7 @@ function viz_fit_T₀_prior()
 	for s = 1:250
 		τ = rand(τ_prior2)
 		T₀ = rand(T₀_prior)
-		lines!(t, T_model.(t, τ, T₀, fixed_params.Tₐ),
+		lines!(t, T_model.(t, τ, T₀, fixed_params2.Tₐ),
 	        	color=(the_colors["model"], 0.1))
 	end
 	xlims!(-0.03*max_t, 1.03*max_t)
@@ -347,7 +388,7 @@ function viz_fit_T₀_prior()
 end
 
 # ╔═╡ b61d5001-3744-432b-bc5e-f8003dbe0a99
-viz_fit_T₀_prior()
+viz_fit_T₀_prior(τ_prior2, T₀_prior, fixed_params2)
 
 # ╔═╡ d592943d-2402-4857-9509-4ae74dee26c4
 function viz_fit_T₀(data::DataFrame, i_obs::Int, Tₐ::Float64, chain::Chains, with_soln::Bool)
@@ -407,7 +448,67 @@ viz_fit_T₀(data2, i_obs, fixed_params2.Tₐ, chain_T₀, true)
 md"## the ill-posed inverse problem"
 
 # ╔═╡ da778a83-aa3d-427f-9cd7-eede559c5c37
+t₀_prior = Uniform(-15, 15)
 
+# ╔═╡ 8b1f8a44-612c-4032-93a7-7b0c21c47c31
+@model function likelihood_for_T₀_t₀(data, i_obs, Tₐ)
+    # Prior distributions.
+	T₀ ~ T₀_prior
+	if data[i_obs, "T [°C]"] < 10.0
+		error("prior makes no sense")
+	end
+	σ ~ σ_prior2
+	τ ~ τ_prior2
+	tₒ ~ t₀_prior
+
+    # Observation
+	tᵢ = data[i_obs, "t [min]"]
+	μ = T_model(tᵢ, τ, T₀, Tₐ, tₒ)
+	data[i_obs, "T [°C]"] ~ Normal(μ, σ)
+
+    return nothing
+end
+
+# ╔═╡ 845bdbf7-f30e-4f0c-a8db-6f272e76eec9
+model_T₀_t₀ = likelihood_for_T₀_t₀(data2, i_obs, fixed_params2.Tₐ)
+
+# ╔═╡ 14bee7d1-dadc-41be-9ea0-1420cd68a121
+chain_T₀_t₀ = sample(model_T₀_t₀, NUTS(), 5_000; progress=true)
+
+# ╔═╡ efd049ee-f3eb-496a-959c-f8ee3ad6c4e4
+function viz_fit_T₀_t₀_prior(
+	τ_prior::Distribution,
+	T₀_prior::Distribution,
+	t₀_prior::Distribution,
+	fixed_params2::NamedTuple
+)
+	max_t = maximum(data2[:, "t [min]"])
+    
+	fig = Figure()
+	ax  = Axis(fig[1, 1], 
+		       xlabel="time, t [min]",
+		       ylabel="temperature [°C]"
+	)
+	vlines!(ax, [0.0], color=("gray", 0.5), linewidth=1)
+
+	for s = 1:250
+		τ = rand(τ_prior)
+		T₀ = rand(T₀_prior)
+		t₀ = rand(t₀_prior)
+
+		t = range(t₀, max_t*1.05, length=200)
+		
+		lines!(t, T_model.(t, τ, T₀, fixed_params2.Tₐ, t₀),
+	        	color=(the_colors["model"], 0.1))
+	end
+	# xlims!(-0.03*max_t, 1.03*max_t)
+	ylims!(0, 20.0)
+	save("prior_theta_0_t_0.pdf", fig)
+	return fig
+end
+
+# ╔═╡ cc42f6f3-22f0-4d41-a22e-fb02767b80a5
+viz_fit_T₀_t₀_prior(τ_prior2, T₀_prior, t₀_prior, fixed_params2)
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -2092,6 +2193,7 @@ version = "3.5.0+0"
 # ╠═ff7e4fd8-e34b-478e-ab8a-2f35aba99ba6
 # ╠═a1e622ae-7672-4ca2-bac2-7dcc0a500f1f
 # ╠═294e240f-c146-4ef3-b172-26e70ad3ed19
+# ╠═1b8c1891-c648-466e-a1f2-b1b8f7b09f70
 # ╠═25b9bccd-0556-4075-a1e9-db9b3d31b3fe
 # ╠═290e2323-7062-48ed-a252-7ea7bb043734
 # ╠═6c797a4b-f692-4312-b434-a662f5c41343
@@ -2111,8 +2213,6 @@ version = "3.5.0+0"
 # ╠═287fd4e2-3afd-4540-be15-f2a486e36e37
 # ╠═282f22da-b95a-41b2-a98a-12c6acd7bc06
 # ╠═bd5602cd-8b6d-430f-a700-40b449d1da27
-# ╠═d959317b-3f19-495e-95ac-50a8fecd659f
-# ╠═a2b6477e-7e7a-48ea-b894-e42882e382f8
 # ╠═477d2b05-1e78-41ad-99af-b0dedfef617f
 # ╠═b61d5001-3744-432b-bc5e-f8003dbe0a99
 # ╠═d592943d-2402-4857-9509-4ae74dee26c4
@@ -2120,5 +2220,10 @@ version = "3.5.0+0"
 # ╠═5b56d8fb-ac24-4ac5-82a7-a51b5a6eb73a
 # ╟─1e5ba0b1-c129-410c-9048-89a75210fd40
 # ╠═da778a83-aa3d-427f-9cd7-eede559c5c37
+# ╠═8b1f8a44-612c-4032-93a7-7b0c21c47c31
+# ╠═845bdbf7-f30e-4f0c-a8db-6f272e76eec9
+# ╠═14bee7d1-dadc-41be-9ea0-1420cd68a121
+# ╠═efd049ee-f3eb-496a-959c-f8ee3ad6c4e4
+# ╠═cc42f6f3-22f0-4d41-a22e-fb02767b80a5
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
