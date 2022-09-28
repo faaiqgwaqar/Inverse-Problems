@@ -530,9 +530,6 @@ function band_direction_y!(ax, x, bot, top, color)
 	)
 end
 
-# ╔═╡ 63041d56-e6de-481a-8fcd-c8f4f6a88c27
-contour(rand(10,10), colormap=ColorSchemes.buda)
-
 # ╔═╡ 5521a857-16c1-461a-b924-3f6e32e09f1a
 function viz_T₀_t₀_distn(T₀_prior::Distribution, 
 	                     t₀_prior::Distribution, 
@@ -549,9 +546,9 @@ function viz_T₀_t₀_distn(T₀_prior::Distribution,
 	
 	fig = Figure()
 	gl = fig[1, 1] = GridLayout()
-	ax_t = Axis(fig[1, 1], ylabel="density", yticks=[0])
-	ax  = Axis(fig[2, 1], xlabel="t₀ [min]", ylabel="T₀ [°C]")
-	ax_r = Axis(fig[2, 2], xlabel="density", xticks=[0])
+	ax_t = Axis(fig[1, 2], ylabel="marginal\ndensity", yticks=[0])
+	ax  = Axis(fig[2, 2], xlabel="t₀ [min]", ylabel="T₀ [°C]")
+	ax_r = Axis(fig[2, 3], xlabel="marginal\ndensity", xticks=[0])
 	linkyaxes!(ax_r, ax)
 	linkxaxes!(ax_t, ax)
 	hidexdecorations!(ax_t)
@@ -578,8 +575,9 @@ function viz_T₀_t₀_distn(T₀_prior::Distribution,
 		end
 	end
 
-	contourf!(ax, t₀s, T₀s, ρs', linewidth=1, 
-		colormap=the_colormaps[posterior_or_prior], extendhigh=the_colors["distn2"])
+	contour!(ax, t₀s, T₀s, ρs', linewidth=1, 
+		colormap=ColorSchemes.Wistia)
+		# colormap=the_colormaps[posterior_or_prior], extendhigh=the_colors["distn2"])
 
 	# marginals
 	marginal_color = (the_colors[posterior_or_prior == "posterior" ? "distn" : "distn2"], 0.4)
@@ -622,10 +620,10 @@ function viz_T₀_t₀_distn(T₀_prior::Distribution,
 	xlims!(ax, minimum(t₀s), maximum(t₀s))
 	ylims!(ax, minimum(T₀s), maximum(T₀s))
 	rowsize!(fig.layout, 1, Relative(.225))
-	colsize!(fig.layout, 2, Relative(.2))
-	# if ! isnothing(savename)
-	#     save(savename * "_i_obs$(bayes_res.i_obs).pdf", fig)
-	# end
+	colsize!(fig.layout, 3, Relative(.2))
+	Colorbar(fig[2, 1], colormap=ColorSchemes.Wistia, ticks=[0], 
+		label="posterior density", flipaxis=false)
+	save("posterior_theta_0_t_0.pdf", fig)
 	fig
 end
 
@@ -633,10 +631,10 @@ end
 viz_T₀_t₀_distn(T₀_prior, t₀_prior, chain_T₀_t₀, "posterior")
 
 # ╔═╡ 2c0baf1c-ce11-43fb-809b-5e8a48902215
+# ╠═╡ disabled = true
+#=╠═╡
 viz_T₀_t₀_distn(T₀_prior, t₀_prior, chain_T₀_t₀, "prior")
-
-# ╔═╡ 3cfa5ffb-9c35-4b2a-9cee-ee2835cb4461
-chain_T₀_t₀
+  ╠═╡ =#
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -2393,10 +2391,8 @@ version = "3.5.0+0"
 # ╠═efd049ee-f3eb-496a-959c-f8ee3ad6c4e4
 # ╠═cc42f6f3-22f0-4d41-a22e-fb02767b80a5
 # ╠═0fc9e0b0-bddc-4d07-a6ce-35cb2c4d6c79
-# ╠═63041d56-e6de-481a-8fcd-c8f4f6a88c27
 # ╠═5521a857-16c1-461a-b924-3f6e32e09f1a
 # ╠═c0169bed-f7fe-40cc-b13a-0c3f0fc46762
 # ╠═2c0baf1c-ce11-43fb-809b-5e8a48902215
-# ╠═3cfa5ffb-9c35-4b2a-9cee-ee2835cb4461
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
