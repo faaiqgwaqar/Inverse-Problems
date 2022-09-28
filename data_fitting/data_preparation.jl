@@ -33,7 +33,7 @@ function read_data(filename::String)
 end
 
 # ╔═╡ 3c2e28af-1506-4ca6-be48-4e38bd67097d
-run = 11
+run = 12
 
 # ╔═╡ 60a97118-1fc1-403b-97fa-fce162e8d6fd
 filename = "limev$run.csv"
@@ -131,7 +131,7 @@ function downsample(data::DataFrame, n::Int, T₀::Float64, Tₐ::Float64)
 	# 	sort(sample(2:i_eq, n, replace=false)),
 	# 	sort(sample(i_eq+1:nrow(data), n-1, replace=false)), 
 	# )
-	return data[i_sample, :]
+	return sort(data[i_sample, :], "t [min]")
 end
 
 # ╔═╡ e35322f8-5065-43ef-a846-77de00f4d065
@@ -176,7 +176,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.0"
 manifest_format = "2.0"
-project_hash = "ba50bcdfc8683c4a3a3c26af89647079352ec7dc"
+project_hash = "ee04435cb49dbebf06047d953f3697b88c5ce67b"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra"]
