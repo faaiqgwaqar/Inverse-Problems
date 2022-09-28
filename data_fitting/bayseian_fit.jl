@@ -322,7 +322,7 @@ T₀_prior = Uniform(0.0, 15.0)
 end
 
 # ╔═╡ 62c5e645-285d-470e-b46b-00f0471b7329
-i_obs = 25 #35
+i_obs = 27
 
 # ╔═╡ efdf4047-81ab-45db-9980-267df2bad314
 model_T₀ = likelihood_for_T₀(data2, i_obs, fixed_params2.Tₐ)
@@ -416,10 +416,7 @@ function viz_fit_T₀(data::DataFrame, i_obs::Int, Tₐ::Float64, chain::Chains,
 		       xlabel="time, t [min]",
 		       ylabel="temperature [°C]"
 	)
-	if with_soln
-		scatter!(data[:, "t [min]"], data[:, "T [°C]"], 
-			label="{(tᵢ, θᵢ)} (test data)", strokewidth=1, color=(:white, 0.0))
-	end
+
 	vlines!(ax, [0.0], color=("gray", 0.5), linewidth=1)
 	if with_soln
 		hlines!(ax, Tₐ, style=:dash, linestyle=:dot, color=the_colors["air"])
@@ -436,6 +433,10 @@ function viz_fit_T₀(data::DataFrame, i_obs::Int, Tₐ::Float64, chain::Chains,
 		end
 	end
 	if with_soln
+		scatter!(data[:, "t [min]"], data[:, "T [°C]"], 
+			label="{(tᵢ, θᵢ)} (test data)", strokewidth=1, color=(:white, 0.0))
+	end
+	if with_soln
 		scatter!([data[i_obs, "t [min]"]], [data[i_obs, "T [°C]"]], 
 		strokewidth=1, color=the_colors["data"])
 	else
@@ -443,10 +444,11 @@ function viz_fit_T₀(data::DataFrame, i_obs::Int, Tₐ::Float64, chain::Chains,
 		label="(t′, θ′)", strokewidth=1, color=the_colors["data"])
 	end
 
+
 	axislegend(position=:rb)
 	xlims!(-0.03*max_t, 1.03*max_t)
 	ylims!(0, 20.0)
-	save("find_theta_zero_i_obs_$(i_obs)_" * (with_soln ? "_soln" : "_data") * ".pdf", fig)
+	save("find_theta_zero_i_obs_$(i_obs)_" * (with_soln ? "soln" : "data") * ".pdf", fig)
 
 	fig
 end
@@ -623,7 +625,7 @@ function viz_T₀_t₀_distn(T₀_prior::Distribution,
 	colsize!(fig.layout, 3, Relative(.2))
 	Colorbar(fig[2, 1], colormap=ColorSchemes.Wistia, ticks=[0], 
 		label="posterior density", flipaxis=false)
-	save("posterior_theta_0_t_0.pdf", fig)
+	save("posterior_theta_0_t_0_i_obs_$(i_obs).pdf", fig)
 	fig
 end
 
@@ -673,7 +675,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.0"
 manifest_format = "2.0"
-project_hash = "3a94cf6dcea3fa7dcf7c132dc202a5a7887093c4"
+project_hash = "be299f1fb5dcca6d5cf26694290003618946ce33"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra"]
