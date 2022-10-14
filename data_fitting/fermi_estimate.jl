@@ -23,7 +23,7 @@ r = 2.5u"cm"
 A = 4 * π * r ^ 2
 
 # ╔═╡ 456897ef-ecdc-46a3-8daa-408200278e5d
-τ = uconvert(u"hr", (m * cₚ) / (U * A))
+τ = (m * cₚ) / (U * A) |> u"hr"
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -40,7 +40,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.2"
 manifest_format = "2.0"
-project_hash = "787e7aee8f35448ebe36fe42bb004a1688cafb2d"
+project_hash = "b05b2874185cf46941b0f41bcb8894984361e87e"
 
 [[deps.Artifacts]]
 uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
