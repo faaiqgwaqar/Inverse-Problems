@@ -109,10 +109,10 @@ fixed_params = (T₀=load("data_run_$run.jld2")["T₀"],
                 Tₐ=load("data_run_$run.jld2")["Tₐ"])
 
 # ╔═╡ ce178132-a07d-4154-83b4-5f536c8f77aa
-σ_prior = Uniform(0.0, 0.5) # °C
+σ_prior = Uniform(0.0, 1.0) # °C
 
 # ╔═╡ 7b8f64b9-9776-4385-a2f0-38f78d76ef79
-τ_prior_1 = Uniform(1.0, 60.0 * 5)
+τ_prior_1 = Uniform(60.0 / 5, 60.0 * 5)
 
 # ╔═╡ ecd4ea3f-1775-4c4e-a679-f8e15eaad3f7
 @model function likelihood_for_τ(data, fixed_params)
@@ -151,6 +151,9 @@ end
 
 # ╔═╡ d9bb0d85-8a08-405c-b1b3-7b0f96d978f4
 inset_bbox = BBox(320, 420, 200, 300)
+
+# ╔═╡ f68fc030-ccc0-462d-8670-75df5d6d1afa
+nrow(data)
 
 # ╔═╡ a1e622ae-7672-4ca2-bac2-7dcc0a500f1f
 function viz_posterior_τ(chain::Chains, τ_prior::Distribution)
@@ -2417,6 +2420,7 @@ version = "3.5.0+0"
 # ╠═bb3ae6a9-5d87-4b90-978e-8674f6c5bd99
 # ╠═ff7e4fd8-e34b-478e-ab8a-2f35aba99ba6
 # ╠═d9bb0d85-8a08-405c-b1b3-7b0f96d978f4
+# ╠═f68fc030-ccc0-462d-8670-75df5d6d1afa
 # ╠═a1e622ae-7672-4ca2-bac2-7dcc0a500f1f
 # ╠═294e240f-c146-4ef3-b172-26e70ad3ed19
 # ╠═25b9bccd-0556-4075-a1e9-db9b3d31b3fe

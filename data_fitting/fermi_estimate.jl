@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.13
+# v0.19.11
 
 using Markdown
 using InteractiveUtils
@@ -14,7 +14,8 @@ m = 100u"g"
 cₚ = 4u"kJ/(kg*K)"
 
 # ╔═╡ c3a99ed5-e801-4313-876f-b4be0736859a
-U = ((2.5+25)/2)u"J/(m^2*s*K)"
+# U = ((2.5+25)/2)u"J/(m^2*s*K)"
+U = 15u"J/(m^2*s*K)"
 
 # ╔═╡ 42576346-8ae0-40e2-b9d4-bc226f3a9350
 r = 2.5u"cm"
@@ -38,7 +39,7 @@ Unitful = "~1.12.0"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.8.2"
+julia_version = "1.8.0"
 manifest_format = "2.0"
 project_hash = "b05b2874185cf46941b0f41bcb8894984361e87e"
 
