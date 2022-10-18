@@ -62,7 +62,7 @@ ts_model = range(0.0, 4.0, length=400)
 function viz_model_only()
 	fig = Figure()
 	ax  = Axis(fig[1, 1], 
-		       xlabel="(t - t₀) / τ", 
+		       xlabel="(t - t₀) / λ", 
 		       ylabel="[θ(t) - θᵃⁱʳ]/[θ₀ - θᵃⁱʳ]"
 	)
 	lines!(ts_model, exp.(-ts_model), color=the_colors["model"])
@@ -78,7 +78,7 @@ viz_model_only()
 function viz_model_only2()
 	fig = Figure()
 	ax  = Axis(fig[1, 1], 
-		       xlabel="(t - t₀) / τ", 
+		       xlabel="(t - t₀) / λ", 
 		       ylabel="θ(t)", 
 		       yticks=([0, 1], ["θ₀", "θᵃⁱʳ"])
 	)
@@ -161,7 +161,7 @@ function viz_posterior_τ(chain::Chains, τ_prior::Distribution)
 	
 	fig = Figure()
 	ax  = Axis(fig[1, 1], 
-		       xlabel="time constant, τ [min]", 
+		       xlabel="time constant, λ [min]", 
 		       ylabel="posterior density",
 			   yticks=[0]
 	)
@@ -170,7 +170,7 @@ function viz_posterior_τ(chain::Chains, τ_prior::Distribution)
 	# prior inset
     inset_box = Axis(fig, 
 		             bbox=inset_bbox, 
-		             xlabel="τ [hr]", 
+		             xlabel="λ [hr]", 
 		             ylabel="prior density", 
 		             yticks=[0])
     translate!(inset_box.scene, 0, 0, 10)
@@ -467,7 +467,7 @@ function viz_fit_T₀(data::DataFrame, i_obs::Int, Tₐ::Float64, chain::Chains,
 		strokewidth=1, color=the_colors["data"])
 	else
 		scatter!([data[i_obs, "t [min]"]], [data[i_obs, "T [°C]"]], 
-		label="(t′, θ′)", strokewidth=1, color=the_colors["data"])
+		label="(tₖ, θₖ)", strokewidth=1, color=the_colors["data"])
 	end
 
 
