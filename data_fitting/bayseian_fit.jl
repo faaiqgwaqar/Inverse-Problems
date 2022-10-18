@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.13
+# v0.19.11
 
 using Markdown
 using InteractiveUtils
@@ -548,7 +548,7 @@ function viz_T₀_t₀_distn(T₀_prior::Distribution,
 		),
 	)
 	
-	fig = Figure()
+	fig = Figure(resolution=(500, 380))
 	gl = fig[1, 1] = GridLayout()
 	ax_t = Axis(fig[1, 2], ylabel="marginal\ndensity", yticks=[0])
 	ax  = Axis(fig[2, 2], xlabel="t₀ [min]", ylabel="T₀ [°C]")
@@ -605,6 +605,10 @@ function viz_T₀_t₀_distn(T₀_prior::Distribution,
 		band_direction_y!(ax_r, T₀s, 
 			   zeros(length(T₀s)), ρ_T₀_prior, (the_colors["distn2"], 0.4))
 	end
+	# truth
+	scatter!(ax, data2[1, "t [min]"], data2[1, "T [°C]"], 
+		label="(t₀, θ₀) (test data)", strokewidth=1, color=(:white, 0.0))
+	axislegend(ax)
 	# m∞_interval = [percentile(posterior_samples[:, "m∞"], p) for p in [5.0, 95.0]] 
 	# τ_interval  = [percentile(posterior_samples[:, "τ"], p) for p in [5.0, 95.0]] 
 	
@@ -669,9 +673,9 @@ Turing = "~0.21.12"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.8.2"
+julia_version = "1.8.0"
 manifest_format = "2.0"
-project_hash = "3a94cf6dcea3fa7dcf7c132dc202a5a7887093c4"
+project_hash = "837f327618a3ecdc8f9a875f26ffd41100564833"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra"]
@@ -1116,9 +1120,9 @@ uuid = "7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"
 
 [[deps.FillArrays]]
 deps = ["LinearAlgebra", "Random", "SparseArrays", "Statistics"]
-git-tree-sha1 = "87519eb762f85534445f5cda35be12e32759ee14"
+git-tree-sha1 = "802bfc139833d2ba893dd9e62ba1767c88d708ae"
 uuid = "1a297f60-69ca-5386-bcde-b61e274b549b"
-version = "0.13.4"
+version = "0.13.5"
 
 [[deps.FixedPointNumbers]]
 deps = ["Statistics"]
@@ -1558,9 +1562,9 @@ version = "0.1.4"
 
 [[deps.MKL_jll]]
 deps = ["Artifacts", "IntelOpenMP_jll", "JLLWrappers", "LazyArtifacts", "Libdl", "Pkg"]
-git-tree-sha1 = "41d162ae9c868218b1f3fe78cba878aa348c2d26"
+git-tree-sha1 = "2ce8695e1e699b68702c03402672a69f54b8aca9"
 uuid = "856f044c-d86e-5d09-b602-aeab76dc8ba7"
-version = "2022.1.0+0"
+version = "2022.2.0+0"
 
 [[deps.MLJModelInterface]]
 deps = ["Random", "ScientificTypesBase", "StatisticalTraits"]
@@ -1602,9 +1606,9 @@ version = "1.2.0"
 
 [[deps.MathTeXEngine]]
 deps = ["AbstractTrees", "Automa", "DataStructures", "FreeTypeAbstraction", "GeometryBasics", "LaTeXStrings", "REPL", "RelocatableFolders", "Test", "UnicodeFun"]
-git-tree-sha1 = "03d7e6e449f2c53907016a2e858d6f6139e68cff"
+git-tree-sha1 = "7f837e1884f1ef84984c919fc7a00638cff1e6d1"
 uuid = "0a4f8689-d25c-4efe-a92b-7142dfc1aa53"
-version = "0.5.2"
+version = "0.5.3"
 
 [[deps.MbedTLS_jll]]
 deps = ["Artifacts", "Libdl"]
@@ -1716,9 +1720,9 @@ version = "0.8.1+0"
 
 [[deps.OpenSSL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "a94dc0169bffbf7e5250fb7e1efb1a85b09105c7"
+git-tree-sha1 = "e60321e3f2616584ff98f0a4f18d98ae6f89bbb3"
 uuid = "458c3c95-2e84-50aa-8efc-19380b2a3a95"
-version = "1.1.18+0"
+version = "1.1.17+0"
 
 [[deps.OpenSpecFun_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl", "Pkg"]
@@ -2157,7 +2161,7 @@ version = "1.10.0"
 [[deps.Tar]]
 deps = ["ArgTools", "SHA"]
 uuid = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
-version = "1.10.1"
+version = "1.10.0"
 
 [[deps.TensorCore]]
 deps = ["LinearAlgebra"]
@@ -2449,6 +2453,5 @@ version = "3.5.0+0"
 # ╠═0fc9e0b0-bddc-4d07-a6ce-35cb2c4d6c79
 # ╠═5521a857-16c1-461a-b924-3f6e32e09f1a
 # ╠═c0169bed-f7fe-40cc-b13a-0c3f0fc46762
-# ╠═2c0baf1c-ce11-43fb-809b-5e8a48902215
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
