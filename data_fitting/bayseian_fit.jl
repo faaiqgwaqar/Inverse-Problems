@@ -277,6 +277,21 @@ viz_fit_τ(data, fixed_params, chain_τ, false)
 # ╔═╡ e9941f5b-6490-4e04-aa36-32f7ac3d45f1
 viz_fit_τ(data, fixed_params, chain_τ, true)
 
+# ╔═╡ 7a01dfaf-fae1-4a8c-a8a2-1ac973bf3197
+md"correlation of τ and σ"
+
+# ╔═╡ f20159ad-7f8b-484e-95ea-afdac97f876a
+begin
+	local fig = Figure()
+	local  ax = Axis(fig[1, 1], xlabel="σ", ylabel="τ")
+	scatter!(DataFrame(chain_τ)[:, "σ"], DataFrame(chain_τ)[:, "τ"], 
+		color=(the_colors["distn"], 0.5))
+	fig
+end
+
+# ╔═╡ f184e3ea-82f9-49f4-afb6-99c609d7936f
+cor(DataFrame(chain_τ)[:, "σ"], DataFrame(chain_τ)[:, "τ"])
+
 # ╔═╡ d8e026b9-8943-437e-a08b-2395de35d705
 md"## time reversal problem"
 
@@ -305,6 +320,9 @@ begin
 	σ_prior2 = truncated(Normal(_σ_prior.μ, _σ_prior.σ), 0.0, nothing)
 end
 
+# ╔═╡ 54efdfb6-bb64-4834-8cd9-a3f126f731e9
+_σ_prior
+
 # ╔═╡ 8d358b8d-7432-421a-8661-4550c0457f97
 T₀_prior = Uniform(0.0, 15.0)
 
@@ -328,6 +346,9 @@ end
 
 # ╔═╡ 62c5e645-285d-470e-b46b-00f0471b7329
 i_obs = 27
+
+# ╔═╡ 07b22d3a-d616-4c89-98c6-d7ee1cd314b6
+data2[i_obs, :]
 
 # ╔═╡ efdf4047-81ab-45db-9980-267df2bad314
 model_T₀ = likelihood_for_T₀(data2, i_obs, fixed_params2.Tₐ)
@@ -2428,6 +2449,9 @@ version = "3.5.0+0"
 # ╠═6c797a4b-f692-4312-b434-a662f5c41343
 # ╠═38bf810d-b588-426c-81e7-a036ea7083f3
 # ╠═e9941f5b-6490-4e04-aa36-32f7ac3d45f1
+# ╟─7a01dfaf-fae1-4a8c-a8a2-1ac973bf3197
+# ╠═f20159ad-7f8b-484e-95ea-afdac97f876a
+# ╠═f184e3ea-82f9-49f4-afb6-99c609d7936f
 # ╟─d8e026b9-8943-437e-a08b-2395de35d705
 # ╠═7df25291-a600-449e-a194-3ec7c3f11361
 # ╠═8f145533-7208-4c25-9b1e-84370c7ac7ca
@@ -2435,9 +2459,11 @@ version = "3.5.0+0"
 # ╟─ac6f1d8d-4402-4737-82f6-4fd098b93b5e
 # ╠═4e68878f-c278-4218-8a52-ce86490981da
 # ╠═d199b848-a86e-4d7c-bcd0-566f9d8ea052
+# ╠═54efdfb6-bb64-4834-8cd9-a3f126f731e9
 # ╠═8d358b8d-7432-421a-8661-4550c0457f97
 # ╠═8dbbbe1c-4eb6-4ac2-a447-bbaa500e03b4
 # ╠═62c5e645-285d-470e-b46b-00f0471b7329
+# ╠═07b22d3a-d616-4c89-98c6-d7ee1cd314b6
 # ╠═efdf4047-81ab-45db-9980-267df2bad314
 # ╠═287fd4e2-3afd-4540-be15-f2a486e36e37
 # ╠═282f22da-b95a-41b2-a98a-12c6acd7bc06
