@@ -262,7 +262,7 @@ function viz_fit_τ(data::DataFrame,
   #       	label="θ(t; τ̂)", color=the_colors["model"])
 	else
 		scatter!(data[:, "t [min]"], data[:, "T [°C]"], 
-			     label="{(tᵢ, θᵢ)}", strokewidth=1, color=the_colors["data"])
+			     label="{(tᵢ, θₘ,ᵢ)}", strokewidth=1, color=the_colors["data"])
 	end
 	axislegend(position=:rb)
 	ylims!(5, 20.0)
@@ -451,7 +451,7 @@ function viz_fit_T₀(data::DataFrame, i_obs::Int, Tₐ::Float64, chain::Chains,
 	end
 
 	if with_soln
-		lines!(t, T_model.(t, sample(chain, 1)[:τ][1], sample(chain, 1)[:T₀][1], fixed_params.Tₐ), label="θ(t; τ, θ₀)",
+		lines!(t, T_model.(t, sample(chain, 1)[:τ][1], sample(chain, 1)[:T₀][1], fixed_params.Tₐ), label="θ(t; λ, θ₀)",
 	          color=(the_colors["model"], 0.1))
 		for row in eachrow(DataFrame(sample(chain, 250, replace=false)))
 			lines!(t, T_model.(t, row[:τ], row[:T₀], fixed_params.Tₐ),
@@ -460,14 +460,14 @@ function viz_fit_T₀(data::DataFrame, i_obs::Int, Tₐ::Float64, chain::Chains,
 	end
 	if with_soln
 		scatter!(data[:, "t [min]"], data[:, "T [°C]"], 
-			label="{(tᵢ, θᵢ)} (test data)", strokewidth=1, color=(:white, 0.0))
+			label="{(tᵢ, θₘ,ᵢ)} (test data)", strokewidth=1, color=(:white, 0.0))
 	end
 	if with_soln
 		scatter!([data[i_obs, "t [min]"]], [data[i_obs, "T [°C]"]], 
 		strokewidth=1, color=the_colors["data"])
 	else
 		scatter!([data[i_obs, "t [min]"]], [data[i_obs, "T [°C]"]], 
-		label="(tₖ, θₖ)", strokewidth=1, color=the_colors["data"])
+		label="(tₖ, θₘ,ₖ)", strokewidth=1, color=the_colors["data"])
 	end
 
 
