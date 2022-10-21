@@ -56,6 +56,7 @@ begin
 	# rcParams["font.name"] = "Fira Math"
 	rcParams["font.family"] = "Fira Math"
 	rcParams["font.size"] = 18
+	rcParams["legend.frameon"] = false
 	rcParams["lines.linewidth"] = 3
 	rcParams["lines.markersize"] = 8
 	rcParams["grid.linestyle"] = "-"
