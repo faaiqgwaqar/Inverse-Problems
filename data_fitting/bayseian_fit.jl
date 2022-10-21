@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.11
+# v0.19.13
 
 using Markdown
 using InteractiveUtils
@@ -16,6 +16,14 @@ mpl_tk = pyimport("mpl_toolkits.axes_grid1.inset_locator")
 # ╔═╡ 2b4ee7f8-0cc0-458a-bb54-03c119dd2944
 sns = pyimport("seaborn")
 
+# ╔═╡ a9db257b-f2a7-4076-aa31-24208a2bfca6
+fm = PyPlot.matplotlib.font_manager.fontManager.addfont("FiraMath-Regular.ttf")
+# font_dirs = ['path/to/font/']
+# font_files = font_manager.findSystemFonts(fontpaths=font_dirs)
+
+# for font_file in font_files:
+#     font_manager.fontManager.addfont(font_file)
+
 # ╔═╡ f10bcc6f-85c8-44d9-aa9c-2d37ab1fdafd
 function wongcolors()
     return [
@@ -23,11 +31,14 @@ function wongcolors()
         (230/255, 159/255, 0/255), # orange
         (0/255, 158/255, 115/255), # green
         (204/255, 121/255, 167/255), # reddish purple
-    	(86/255, 180/255, 233/255), # sky blue
-        (213/255, 94/255, 0/255), # vermillion
+    	# (86/255, 180/255, 233/255), # sky blue
+        # (213/255, 94/255, 0/255), # vermillion
         (240/255, 228/255, 66/255), # yellow
     ]
 end
+
+# ╔═╡ 220beb01-2da2-444a-be94-795398228bdf
+[RGB(c...) for c in wongcolors()]
 
 # ╔═╡ 2ccf2c0d-1f31-4ebc-9427-4c36f221f66e
 begin
@@ -39,10 +50,11 @@ begin
 	rcParams["axes.labelcolor"] = gray
 	rcParams["text.color"] = gray
 	rcParams["xtick.color"] = gray
+	rcParams["mathtext.fontset"] = "custom"
 	rcParams["ytick.color"] = gray
-	rcParams["font.family"] = "sans-serif"
-	rcParams["font.sans-serif"] = ["Fira Sans OT"]
-	rcParams["font.sans-serif"] = ["Open Sans"]
+	
+	# rcParams["font.name"] = "Fira Math"
+	rcParams["font.family"] = "Fira Math"
 	rcParams["font.size"] = 18
 	rcParams["lines.linewidth"] = 3
 	rcParams["lines.markersize"] = 8
@@ -54,7 +66,7 @@ end
 # ╔═╡ 7f9fba7b-9739-4a19-9a20-21744b0330b0
 begin
 	ff=figure()
-	xlabel("test")
+	xlabel(L"test, $\theta \sin(x^2)$")
 	ff
 end
 
@@ -79,17 +91,17 @@ import ScikitLearn as skl
 skl.@sk_import neighbors: KernelDensity
 
 # ╔═╡ a081eb2c-ff46-4efa-a6cd-ee3e9209e14e
-my_colors = ColorSchemes.Set3_5 # sns.color_palette("Set3_5")# wongcolors()# sns.color_palette() 
+my_colors = wongcolors()# ColorSchemes.Set3_5 # sns.color_palette("Set3_5")# wongcolors()# sns.color_palette() 
 
 # ╔═╡ 8931e445-6664-4609-bfa1-9e808fbe9c09
-_the_colors = Dict("air"    => my_colors[1], 
+the_colors = Dict("air"    => my_colors[1], 
 	              "data"   => my_colors[2],
-	              "posterior"  => my_colors[3], 
+	              "model"  => my_colors[3], 
 	              "prior" => my_colors[4],
-	              "model"  => my_colors[5])
+	              "posterior"  => my_colors[5])
 
 # ╔═╡ ddee1dcf-41cd-4836-bd87-af688a009464
-the_colors = Dict(key => (c.r, c.g, c.b) for (key, c) in _the_colors)
+# the_colors = Dict(key => (c.r, c.g, c.b) for (key, c) in _the_colors)
 
 # ╔═╡ 3ae0b235-5ade-4c30-89ac-7f0480c0da11
 md"## the forward model"
@@ -110,7 +122,7 @@ function viz_model_only()
 	fig, ax = myfig()
 	xlabel(L"time, $(t-t_0)/\lambda$")
 	ylabel(L"lime temperature, $\theta(t)$")
-	yticks([0, 1], [L"$\theta_0$", L"$\theta_\infty$"])
+	yticks([0, 1], [L"$\theta_0$", L"$\theta^{\rm{air}}$"])
 	plot(ts_model, 1.0 .- exp.(-ts_model), c=the_colors["model"])
 	axhline([1.0], linestyle="dashed", label=L"$\theta_\infty$", c=the_colors["air"])
 	ylim(-0.1, 1.1)
@@ -216,6 +228,7 @@ function viz_posterior_τ(chain::Chains, τ_prior::Distribution)
 	inset.set_ylabel("prior\ndensity")
 	inset.set_ylim(ymin=0)
 	τs = range(0.0, 250.0, length=100)
+	τs = vcat(τs, [τ_prior.a-0.001, τ_prior.a+0.001])
 	τs = vcat(τs, [τ_prior.b-0.001, τ_prior.b+0.001])
 	sort!(τs)
 	ρ_τ_prior = [pdf(τ_prior, τ) for τ in τs]
@@ -249,9 +262,9 @@ function viz_fit_τ(data::DataFrame,
 	xlabel(L"time, $t$ [hr]")
 	ylabel("temperature [°C]")
 	axhline([fixed_params.Tₐ], linestyle="dashed", zorder=0,
-			color=the_colors["air"], label=with_soln ? "" : L"$\theta_\infty$")
+			color=the_colors["air"], label=with_soln ? "" : L"$\theta^{\rm{air}}$")
 
-	axvline([0.0], color="gray", linewidth=1)
+	axvline([0.0], color="gray", linewidth=1, zorder=0)
 	scatter(data[:, "t [min]"] / 60.0, data[:, "T [°C]"], edgecolors="black",
 			label=with_soln ? "" : L"$\{(t_i, θ_{\rm{obs},i})\}$", color=the_colors["data"])
 	if with_soln
@@ -427,7 +440,7 @@ function viz_fit_T₀(data::DataFrame, i_obs::Int, Tₐ::Float64, chain::Chains,
 
 	axvline([0.0], color="gray", linewidth=1)
 	axhline([fixed_params.Tₐ], linestyle="dashed", zorder=0,
-			color=the_colors["air"], label=with_soln ? "" : L"$\theta_\infty$")
+			color=the_colors["air"], label=with_soln ? "" : L"$\theta^{\rm{air}}$")
 
 	if with_soln
 		for (i, row) in enumerate(eachrow(DataFrame(sample(chain, 250, replace=false))))
@@ -551,9 +564,9 @@ Turing = "~0.21.12"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.8.0"
+julia_version = "1.8.2"
 manifest_format = "2.0"
-project_hash = "4b6a173d8c0c75524b815764db4d1f3c81e89908"
+project_hash = "f0852b9ff9e16f585f8edc6da01857498ed6eefd"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra"]
@@ -1573,7 +1586,7 @@ version = "1.10.0"
 [[deps.Tar]]
 deps = ["ArgTools", "SHA"]
 uuid = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
-version = "1.10.0"
+version = "1.10.1"
 
 [[deps.TensorCore]]
 deps = ["LinearAlgebra"]
@@ -1675,7 +1688,9 @@ version = "17.4.0+0"
 # ╠═43bcf4b0-fbfc-11ec-0e23-bb05c02078c9
 # ╠═ae477150-45db-47ed-a6a8-018541cfe485
 # ╠═2b4ee7f8-0cc0-458a-bb54-03c119dd2944
+# ╠═a9db257b-f2a7-4076-aa31-24208a2bfca6
 # ╠═f10bcc6f-85c8-44d9-aa9c-2d37ab1fdafd
+# ╠═220beb01-2da2-444a-be94-795398228bdf
 # ╠═2ccf2c0d-1f31-4ebc-9427-4c36f221f66e
 # ╠═7f9fba7b-9739-4a19-9a20-21744b0330b0
 # ╠═3749245a-67b2-4015-8a58-1b89c8c3b328
