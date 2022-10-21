@@ -115,6 +115,13 @@ function viz_model_only()
 	axhline([1.0], linestyle="dashed", label=L"$\theta_\infty$", c=the_colors["air"])
 	ylim(-0.1, 1.1)
 	xlim(0, 4)
+	
+	# read image file
+	arr_image = plt.imread("transparent_lime.png", format="png")
+	inset = mpl_tk.inset_axes(ax, width="30%", height="30%", loc=4)
+	inset.imshow(arr_image)
+	inset.set_axis_off()
+	
 	tight_layout()
 	savefig("model_soln.pdf", format="pdf")
 	return fig
