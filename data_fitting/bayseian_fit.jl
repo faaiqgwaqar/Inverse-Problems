@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.13
+# v0.19.11
 
 using Markdown
 using InteractiveUtils
@@ -243,7 +243,7 @@ function viz_posterior_τ(chain::Chains, τ_prior::Distribution)
 
 	# posterior
 	println("ci = ", round.([τ.lb, τ.ub], digits=2))
-
+	tight_layout()
 	savefig("posterior_tau.pdf", format="pdf")
 	fig
 end
@@ -281,7 +281,7 @@ function viz_fit_τ(data::DataFrame,
 	xlim(-0.03*max_t, 1.03*max_t)
 	legend()
 	tight_layout()
-	# save("find_tau" * (with_soln ? "_soln" : "_data") * ".pdf", fig)
+	savefig("find_tau" * (with_soln ? "_soln" : "_data") * ".pdf", format="pdf")
 	fig
 end
 
@@ -416,7 +416,7 @@ function viz_posterior_T₀(chain::Chains, i_obs::Int, T₀_prior::Distribution)
 
 	# posterior
 	println("ci = ", round.([T₀.lb, T₀.ub], digits=2))
-	
+	tight_layout()
 	savefig("posterior_theta_zero_i_obs_$(i_obs).pdf", format="pdf")
 	fig
 end
@@ -468,7 +468,8 @@ function viz_fit_T₀(data::DataFrame, i_obs::Int, Tₐ::Float64, chain::Chains,
 	legend()
 	xlim(-0.03*max_t/60, 1.03*max_t/60)
 	ylim(0, 20.0)
-	# save("find_theta_zero_i_obs_$(i_obs)_" * (with_soln ? "soln" : "data") * ".pdf", fig)
+	tight_layout()
+	savefig("find_theta_zero_i_obs_$(i_obs)_" * (with_soln ? "soln" : "data") * ".pdf", format="pdf")
 
 	fig
 end
@@ -521,6 +522,7 @@ function viz_T₀_t₀_posterior_distn(chain_T₀_t₀::Chains)
 	)
 	jp.ax_joint.set_xlabel(L"initial temperature, $\theta_0$ [°C]")
 	jp.ax_joint.set_ylabel(L"time taken out of fridge, $t_0$ [hr]")
+	tight_layout()
 	savefig("posterior_initial_temp_initial_time.pdf", format="pdf")
 	return jp.fig
 end
@@ -565,7 +567,7 @@ Turing = "~0.21.12"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.8.2"
+julia_version = "1.8.0"
 manifest_format = "2.0"
 project_hash = "f0852b9ff9e16f585f8edc6da01857498ed6eefd"
 
@@ -1587,7 +1589,7 @@ version = "1.10.0"
 [[deps.Tar]]
 deps = ["ArgTools", "SHA"]
 uuid = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
-version = "1.10.1"
+version = "1.10.0"
 
 [[deps.TensorCore]]
 deps = ["LinearAlgebra"]
