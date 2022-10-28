@@ -10,6 +10,9 @@ using DataFrames, Distributions, Turing, LinearAlgebra,Random, JLD2, PyPlot, Col
 # ╔═╡ b1c06c4d-9b4d-4af3-9e9b-3ba993ca83a0
 md"# Bayesian statistical inversion"
 
+# ╔═╡ edb44636-d6d4-400f-adc4-75b287a1f993
+TableOfContents()
+
 # ╔═╡ ae477150-45db-47ed-a6a8-018541cfe485
 mpl_tk = pyimport("mpl_toolkits.axes_grid1.inset_locator")
 
@@ -75,9 +78,6 @@ function myfig()
     ax.yaxis.set_ticks_position("left")
     return fig, ax
 end
-
-# ╔═╡ edb44636-d6d4-400f-adc4-75b287a1f993
-TableOfContents()
 
 # ╔═╡ a081eb2c-ff46-4efa-a6cd-ee3e9209e14e
 my_colors = wongcolors()# ColorSchemes.Set3_5 # sns.color_palette("Set3_5")# wongcolors()# sns.color_palette() 
@@ -203,14 +203,16 @@ function viz_convergence(chain::Chains, var::String)
 			τs = range(1.0, 1.15, length=120) * 60.0
 			ρ = get_kde_ρ(c[:, var], 0.1)
 			ax[2].plot(τs/60.0, ρ.(τs), label="chain $r", linewidth=1)
+			ax[2].set_xlim(minimum(τs)/60, maximum(τs)/60)
 		elseif var == "T₀"
 			T₀s = range(0.0, 15.0, length=120)
 			ρ = get_kde_ρ(c[:, var], 0.2)
 			ax[2].plot(T₀s, ρ.(T₀s), label="chain $r", linewidth=1)
+			ax[2].set_xlim(minimum(T₀s), maximum(T₀s))
 		end
 	end
 	ax[1].set_xlabel("iteration")
-	
+	ax[1].set_xlim(minimum(DataFrame(chain)[:, "iteration"])-1, maximum(DataFrame(chain)[:, "iteration"])+1)
 	ax[2].set_ylabel("density")
 	ax[2].set_ylim(ymin=0)
 	ax[2].set_yticks([0])
@@ -291,7 +293,7 @@ function viz_fit_τ(data::DataFrame,
 
 	axvline([0.0], color="gray", linewidth=1, zorder=0)
 	scatter(data[:, "t [min]"] / 60.0, data[:, "T [°C]"], edgecolors="black",
-			label=with_soln ? "" : L"$\{(t_i, θ_{\rm{obs},i})\}$", color=the_colors["data"])
+			label=with_soln ? "" : L"$\{(t_i, θ_{\rm{obs},i})\}_{i=0}^N$", color=the_colors["data"])
 	if with_soln
 		for (i, row) in enumerate(eachrow(DataFrame(sample(chain, 250, replace=false))))
 			plot(t, T_model.(t*60.0, row[:τ], fixed_params.T₀, fixed_params.Tₐ),
@@ -384,7 +386,7 @@ T₀_prior = Uniform(0.0, 15.0)
 end
 
 # ╔═╡ 62c5e645-285d-470e-b46b-00f0471b7329
-i_obs = 30
+i_obs = 30 # and try 35
 
 # ╔═╡ 07b22d3a-d616-4c89-98c6-d7ee1cd314b6
 data2[i_obs, :]
@@ -1720,6 +1722,7 @@ version = "17.4.0+0"
 # ╔═╡ Cell order:
 # ╟─b1c06c4d-9b4d-4af3-9e9b-3ba993ca83a0
 # ╠═43bcf4b0-fbfc-11ec-0e23-bb05c02078c9
+# ╠═edb44636-d6d4-400f-adc4-75b287a1f993
 # ╠═ae477150-45db-47ed-a6a8-018541cfe485
 # ╠═2b4ee7f8-0cc0-458a-bb54-03c119dd2944
 # ╠═ad610936-99a3-42a1-800d-94e66051f605
@@ -1729,7 +1732,6 @@ version = "17.4.0+0"
 # ╠═220beb01-2da2-444a-be94-795398228bdf
 # ╠═2ccf2c0d-1f31-4ebc-9427-4c36f221f66e
 # ╠═3749245a-67b2-4015-8a58-1b89c8c3b328
-# ╠═edb44636-d6d4-400f-adc4-75b287a1f993
 # ╠═a081eb2c-ff46-4efa-a6cd-ee3e9209e14e
 # ╠═8931e445-6664-4609-bfa1-9e808fbe9c09
 # ╠═ddee1dcf-41cd-4836-bd87-af688a009464
