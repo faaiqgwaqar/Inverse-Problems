@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.11
+# v0.19.13
 
 using Markdown
 using InteractiveUtils
@@ -16,13 +16,14 @@ mpl_tk = pyimport("mpl_toolkits.axes_grid1.inset_locator")
 # ╔═╡ 2b4ee7f8-0cc0-458a-bb54-03c119dd2944
 sns = pyimport("seaborn")
 
+# ╔═╡ ad610936-99a3-42a1-800d-94e66051f605
+import ScikitLearn as skl
+
+# ╔═╡ cbd53ba5-34f0-42fc-8ac1-386a72e23e13
+skl.@sk_import neighbors: KernelDensity
+
 # ╔═╡ a9db257b-f2a7-4076-aa31-24208a2bfca6
 fm = PyPlot.matplotlib.font_manager.fontManager.addfont("FiraMath-Regular.ttf")
-# font_dirs = ['path/to/font/']
-# font_files = font_manager.findSystemFonts(fontpaths=font_dirs)
-
-# for font_file in font_files:
-#     font_manager.fontManager.addfont(font_file)
 
 # ╔═╡ f10bcc6f-85c8-44d9-aa9c-2d37ab1fdafd
 function wongcolors()
@@ -64,13 +65,6 @@ begin
 	rcParams["figure.figsize"] =  [6.0 * 0.9, 4.8 * 0.9]
 end
 
-# ╔═╡ 7f9fba7b-9739-4a19-9a20-21744b0330b0
-begin
-	ff=figure()
-	xlabel(L"test, $\theta \sin(x^2)$")
-	ff
-end
-
 # ╔═╡ 3749245a-67b2-4015-8a58-1b89c8c3b328
 function myfig()
     fig = figure()
@@ -85,20 +79,14 @@ end
 # ╔═╡ edb44636-d6d4-400f-adc4-75b287a1f993
 TableOfContents()
 
-# ╔═╡ ad610936-99a3-42a1-800d-94e66051f605
-import ScikitLearn as skl
-
-# ╔═╡ cbd53ba5-34f0-42fc-8ac1-386a72e23e13
-skl.@sk_import neighbors: KernelDensity
-
 # ╔═╡ a081eb2c-ff46-4efa-a6cd-ee3e9209e14e
 my_colors = wongcolors()# ColorSchemes.Set3_5 # sns.color_palette("Set3_5")# wongcolors()# sns.color_palette() 
 
 # ╔═╡ 8931e445-6664-4609-bfa1-9e808fbe9c09
-the_colors = Dict("air"    => my_colors[1], 
-	              "data"   => my_colors[2],
-	              "model"  => my_colors[3], 
-	              "prior" => my_colors[4],
+the_colors = Dict("air"        => my_colors[1], 
+	              "data"       => my_colors[2],
+	              "model"      => my_colors[3], 
+	              "prior"      => my_colors[4],
 	              "posterior"  => my_colors[5])
 
 # ╔═╡ ddee1dcf-41cd-4836-bd87-af688a009464
@@ -183,7 +171,7 @@ end
 model_τ = likelihood_for_τ(data, fixed_params)
 
 # ╔═╡ bb3ae6a9-5d87-4b90-978e-8674f6c5bd99
-chain_τ = sample(model_τ, NUTS(), 5_000; progress=true)
+chain_τ = sample(model_τ, NUTS(), MCMCSerial(), 2_500, 3; progress=true)
 
 # ╔═╡ ff7e4fd8-e34b-478e-ab8a-2f35aba99ba6
 function analyze_posterior(chain::Chains, param::Symbol)
@@ -205,6 +193,42 @@ function get_kde_ρ(x::Vector{Float64}, bw::Float64)
 
 	return y -> exp(kde.score_samples(reshape([y], 1, 1))[1])
 end
+
+# ╔═╡ 9e78c280-c19b-469b-8a2b-3c9f4b92a2e5
+function viz_convergence(chain::Chains, var::String)
+	f, ax = subplots(2, 1, figsize=(10, 6))
+	for (r, c) in enumerate(groupby(DataFrame(chain), "chain"))
+		ax[1].plot(c[:, "iteration"], c[:, var], linewidth=1)
+		if var == "τ"
+			τs = range(1.0, 1.15, length=120) * 60.0
+			ρ = get_kde_ρ(c[:, var], 0.1)
+			ax[2].plot(τs/60.0, ρ.(τs), label="chain $r", linewidth=1)
+		elseif var == "T₀"
+			T₀s = range(0.0, 15.0, length=120)
+			ρ = get_kde_ρ(c[:, var], 0.2)
+			ax[2].plot(T₀s, ρ.(T₀s), label="chain $r", linewidth=1)
+		end
+	end
+	ax[1].set_xlabel("iteration")
+	
+	ax[2].set_ylabel("density")
+	ax[2].set_ylim(ymin=0)
+	ax[2].set_yticks([0])
+	if var == "τ"
+		ax[1].set_ylabel(L"$\lambda$ [hr]")
+		ax[2].set_xlabel(L"$\lambda$ [hr]")
+	elseif var == "T₀"
+		ax[1].set_ylabel(L"$\theta_0$ [°C]")
+		ax[2].set_xlabel(L"$\theta_0$ [°C]")
+	end
+	ax[2].legend()
+	tight_layout()
+	savefig("convergence_study.pdf", format="pdf")
+	f
+end
+
+# ╔═╡ 44963969-6883-4c7f-a6ed-4c6eac003dfe
+viz_convergence(chain_τ, "τ")
 
 # ╔═╡ a1e622ae-7672-4ca2-bac2-7dcc0a500f1f
 function viz_posterior_τ(chain::Chains, τ_prior::Distribution)
@@ -360,7 +384,7 @@ T₀_prior = Uniform(0.0, 15.0)
 end
 
 # ╔═╡ 62c5e645-285d-470e-b46b-00f0471b7329
-i_obs = 27
+i_obs = 30
 
 # ╔═╡ 07b22d3a-d616-4c89-98c6-d7ee1cd314b6
 data2[i_obs, :]
@@ -369,7 +393,10 @@ data2[i_obs, :]
 model_T₀ = likelihood_for_T₀(data2, i_obs, fixed_params2.Tₐ)
 
 # ╔═╡ 287fd4e2-3afd-4540-be15-f2a486e36e37
-chain_T₀ = sample(model_T₀, NUTS(), 5_000; progress=true)
+chain_T₀ = sample(model_T₀, NUTS(), MCMCSerial(), 2_500, 3; progress=true)
+
+# ╔═╡ 3f954d0a-3f4e-43c9-b028-f2abdc83792a
+viz_convergence(chain_T₀, "T₀")
 
 # ╔═╡ 282f22da-b95a-41b2-a98a-12c6acd7bc06
 function viz_posterior_T₀(chain::Chains, i_obs::Int, T₀_prior::Distribution)
@@ -424,9 +451,6 @@ end
 # ╔═╡ bd5602cd-8b6d-430f-a700-40b449d1da27
 viz_posterior_T₀(chain_T₀, i_obs, T₀_prior)
 
-# ╔═╡ 1897327b-ce33-4f2e-9bd6-403b7b6d779b
-
-
 # ╔═╡ d592943d-2402-4857-9509-4ae74dee26c4
 function viz_fit_T₀(data::DataFrame, i_obs::Int, Tₐ::Float64, chain::Chains, with_soln::Bool)
 	max_t = maximum(data[:, "t [min]"])
@@ -456,7 +480,7 @@ function viz_fit_T₀(data::DataFrame, i_obs::Int, Tₐ::Float64, chain::Chains,
 	end
 	scatter([data[i_obs, "t [min]"]] / 60, [data[i_obs, "T [°C]"]], 
 		edgecolor="black", color=the_colors["data"], 
-		label=with_soln ? "" : L"$(t_k, \theta_{\rm{obs},k})$",zorder=100)
+		label=with_soln ? "" : L"$(t\prime, \theta_{\rm{obs}}\prime)$",zorder=100)
 	# if with_soln
 	# 	scatter!([data[i_obs, "t [min]"]], [data[i_obs, "T [°C]"]], 
 	# 	strokewidth=1, color=the_colors["data"])
@@ -520,15 +544,22 @@ function viz_T₀_t₀_posterior_distn(chain_T₀_t₀::Chains)
 		xlim=(0, 15), ylim=(-0.5, 0.5),
 		marginal_kws=Dict(:fill=>true, :color => "black", :facecolor=>the_colors["posterior"])
 	)
+	jp.ax_joint.scatter([data2[1, "T [°C]"]], [data2[1, "t [min]"]/60.0], 		
+			color=the_colors["data"], edgecolor="black", zorder=10000)
 	jp.ax_joint.set_xlabel(L"initial temperature, $\theta_0$ [°C]")
 	jp.ax_joint.set_ylabel(L"time taken out of fridge, $t_0$ [hr]")
+	jp.ax_marg_x.axvline([data2[1, "T [°C]"]], 
+		linestyle="dashed", color=the_colors["data"])
+	jp.ax_marg_y.axhline([data2[1, "t [min]"]], 
+		linestyle="dashed", color=the_colors["data"])
+
 	tight_layout()
-	savefig("posterior_initial_temp_initial_time.pdf", format="pdf")
+	savefig("posterior_initial_temp_initial_time_i_obs_$i_obs.pdf", format="pdf")
 	return jp.fig
 end
 
 # ╔═╡ 52accaa1-f52d-4da3-8a94-52f263a45f1f
-viz_T₀_t₀_posterior_distn(chain_T₀_t₀)
+jp=viz_T₀_t₀_posterior_distn(chain_T₀_t₀)
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -567,7 +598,7 @@ Turing = "~0.21.12"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.8.0"
+julia_version = "1.8.2"
 manifest_format = "2.0"
 project_hash = "f0852b9ff9e16f585f8edc6da01857498ed6eefd"
 
@@ -1589,7 +1620,7 @@ version = "1.10.0"
 [[deps.Tar]]
 deps = ["ArgTools", "SHA"]
 uuid = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
-version = "1.10.0"
+version = "1.10.1"
 
 [[deps.TensorCore]]
 deps = ["LinearAlgebra"]
@@ -1691,15 +1722,14 @@ version = "17.4.0+0"
 # ╠═43bcf4b0-fbfc-11ec-0e23-bb05c02078c9
 # ╠═ae477150-45db-47ed-a6a8-018541cfe485
 # ╠═2b4ee7f8-0cc0-458a-bb54-03c119dd2944
+# ╠═ad610936-99a3-42a1-800d-94e66051f605
+# ╠═cbd53ba5-34f0-42fc-8ac1-386a72e23e13
 # ╠═a9db257b-f2a7-4076-aa31-24208a2bfca6
 # ╠═f10bcc6f-85c8-44d9-aa9c-2d37ab1fdafd
 # ╠═220beb01-2da2-444a-be94-795398228bdf
 # ╠═2ccf2c0d-1f31-4ebc-9427-4c36f221f66e
-# ╠═7f9fba7b-9739-4a19-9a20-21744b0330b0
 # ╠═3749245a-67b2-4015-8a58-1b89c8c3b328
 # ╠═edb44636-d6d4-400f-adc4-75b287a1f993
-# ╠═ad610936-99a3-42a1-800d-94e66051f605
-# ╠═cbd53ba5-34f0-42fc-8ac1-386a72e23e13
 # ╠═a081eb2c-ff46-4efa-a6cd-ee3e9209e14e
 # ╠═8931e445-6664-4609-bfa1-9e808fbe9c09
 # ╠═ddee1dcf-41cd-4836-bd87-af688a009464
@@ -1717,6 +1747,8 @@ version = "17.4.0+0"
 # ╠═ecd4ea3f-1775-4c4e-a679-f8e15eaad3f7
 # ╠═2e57666d-b3f4-451e-86fd-781217c1258d
 # ╠═bb3ae6a9-5d87-4b90-978e-8674f6c5bd99
+# ╠═9e78c280-c19b-469b-8a2b-3c9f4b92a2e5
+# ╠═44963969-6883-4c7f-a6ed-4c6eac003dfe
 # ╠═ff7e4fd8-e34b-478e-ab8a-2f35aba99ba6
 # ╠═788f5c20-7ebb-43e7-bd07-46aa6c9fd249
 # ╠═a1e622ae-7672-4ca2-bac2-7dcc0a500f1f
@@ -1741,9 +1773,9 @@ version = "17.4.0+0"
 # ╠═07b22d3a-d616-4c89-98c6-d7ee1cd314b6
 # ╠═efdf4047-81ab-45db-9980-267df2bad314
 # ╠═287fd4e2-3afd-4540-be15-f2a486e36e37
+# ╠═3f954d0a-3f4e-43c9-b028-f2abdc83792a
 # ╠═282f22da-b95a-41b2-a98a-12c6acd7bc06
 # ╠═bd5602cd-8b6d-430f-a700-40b449d1da27
-# ╠═1897327b-ce33-4f2e-9bd6-403b7b6d779b
 # ╠═d592943d-2402-4857-9509-4ae74dee26c4
 # ╠═007ae23e-7572-4075-859b-451b379be0e6
 # ╠═5b56d8fb-ac24-4ac5-82a7-a51b5a6eb73a
