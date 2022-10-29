@@ -49,7 +49,7 @@ begin
 	# https://ardoi.github.io/post/nicer_mpl/
 	rcParams = PyPlot.PyDict(PyPlot.matplotlib."rcParams")
 	gray = "444444"
-	rcParams["axes.facecolor"] = "f5f5f5"
+	rcParams["axes.facecolor"] = "white"# "f5f5f5"
 	rcParams["axes.edgecolor"] = gray
 	rcParams["axes.labelcolor"] = gray
 	rcParams["text.color"] = gray
@@ -60,7 +60,7 @@ begin
 	# rcParams["font.name"] = "Fira Math"
 	rcParams["font.family"] = "Fira Math"
 	rcParams["font.size"] = 18
-	rcParams["legend.frameon"] = false
+	rcParams["legend.frameon"] = true
 	rcParams["lines.linewidth"] = 3
 	rcParams["lines.markersize"] = 8
 	rcParams["grid.linestyle"] = "-"
@@ -69,8 +69,8 @@ begin
 end
 
 # ╔═╡ 3749245a-67b2-4015-8a58-1b89c8c3b328
-function myfig()
-    fig = figure()
+function myfig(;figsize=nothing)
+    fig = figure(figsize=isnothing(figsize) ? Tuple(rcParams["figure.figsize"]) : figsize)
     ax = gca()
     ax.spines["right"].set_visible(false)
     ax.spines["top"].set_visible(false)
@@ -250,7 +250,8 @@ function viz_posterior_τ(chain::Chains, τ_prior::Distribution)
 	yticks([0])
 
 	# prior inset
-	inset = mpl_tk.inset_axes(ax, width="30%", height="30%", loc=1)
+	#inset = mpl_tk.inset_axes(ax, width="30%", height="30%", loc=1)
+	inset = ax.inset_axes([0.75, 0.7, 0.3, 0.3])
 	inset.set_xlabel(L"$\lambda$ [hr]")
 	inset.set_ylabel("prior\ndensity")
 	inset.set_ylim(ymin=0)
@@ -303,13 +304,83 @@ function viz_fit_τ(data::DataFrame,
 	else
 
 	end
-	ylim(5, 20.0)
+	ylim(0, 20.0)
 	xlim(-0.03*max_t, 1.03*max_t)
-	legend()
+	legend(loc="lower right")
 	tight_layout()
 	savefig("find_tau" * (with_soln ? "_soln" : "_data") * ".pdf", format="pdf")
 	fig
 end
+
+# ╔═╡ cd46a3c7-ae78-4f3c-8ba6-c4a55d598843
+function viz_b4_after_inference(
+				   data::DataFrame, 
+	               fixed_params::NamedTuple, 
+	               chain::Chains;
+				   i_obs=nothing
+)
+	max_t = maximum(data[:, "t [min]"]) / 60.0
+    t = range(0.0, max_t * 1.05, length=200)
+	
+	fig, axs = subplots(1, 2, sharey=true, sharex=true,
+			figsize=(
+				rcParams["figure.figsize"][1]*1.8, 
+			    rcParams["figure.figsize"][2]
+			)
+		)
+
+	if ! isnothing(i_obs)
+		axs[2].scatter(data[:, "t [min]"] / 60.0, data[:, "T [°C]"], 
+			    edgecolors="black",
+				label=L"test data$\{(t_i, θ_{\rm{obs},i})\}$", color="white")
+	end
+	for i = 1:2
+		axs[i].set_xlabel(L"time, $t$ [hr]")
+		axs[i].axhline([fixed_params.Tₐ], linestyle="dashed", zorder=0,
+			color=the_colors["air"], label=i == 2 ? "" : L"$\theta^{\rm{air}}$")
+		axs[i].axvline([0.0], color="gray", linewidth=1, zorder=0)
+		if isnothing(i_obs)
+			axs[i].scatter(data[:, "t [min]"] / 60.0, data[:, "T [°C]"], 	
+				edgecolors="black",
+				label=i == 2 ? "" : L"$\{(t_i, θ_{\rm{obs},i})\}_{i=0}^N$", color=the_colors["data"])
+		else
+			axs[i].scatter(data[i_obs, "t [min]"] / 60.0, data[i_obs, "T [°C]"], 	
+				edgecolors="black",
+				label=i == 2 ? "" : L"$(t_i\prime, θ_{\rm{obs}}\prime)$", color=the_colors["data"], zorder=1000)
+		end
+	end
+	axs[1].set_ylabel("temperature [°C]")
+	axs[1].set_title("before BSI")
+	axs[2].set_title("after BSI")
+
+	for (i, row) in enumerate(eachrow(DataFrame(sample(chain, 100, replace=false))))
+		if isnothing(i_obs)
+			axs[2].plot(t, T_model.(t*60.0, row[:τ], fixed_params.T₀, fixed_params.Tₐ),
+				  color=the_colors["model"], alpha=0.1, 
+				  label= (i == 1) ? L"$\theta(t;\lambda)$" : "")
+		else
+			axs[2].plot(t, T_model.(t*60.0, row[:τ], row[:T₀], fixed_params.Tₐ),
+				  color=the_colors["model"], alpha=0.1, 
+				  label=(i == 1) ? L"$\theta(t;\theta_0)$" : "")
+		end
+	end
+	for i = 1:2
+		axs[i].legend(loc="lower right", fontsize=16)
+	end
+	# end
+	ylim(0, 20.0)
+	xlim(-0.03*max_t, 10.2)
+	tight_layout()
+	if ! isnothing(i_obs)
+		savefig("param_id_b4_after_BSI.pdf", format="pdf")
+	else
+		savefig("time_reversal_id_$(i_obs)_id_b4_after_BSI.pdf", format="pdf")
+	end
+	return fig
+end
+
+# ╔═╡ b6b05d1b-5e2f-4082-a7ef-1211024c700b
+viz_b4_after_inference(data, fixed_params, chain_τ)
 
 # ╔═╡ 38bf810d-b588-426c-81e7-a036ea7083f3
 viz_fit_τ(data, fixed_params, chain_τ, false)
@@ -386,7 +457,7 @@ T₀_prior = Uniform(0.0, 15.0)
 end
 
 # ╔═╡ 62c5e645-285d-470e-b46b-00f0471b7329
-i_obs = 30 # and try 35
+i_obs = 35 # and try 35
 
 # ╔═╡ 07b22d3a-d616-4c89-98c6-d7ee1cd314b6
 data2[i_obs, :]
@@ -417,7 +488,7 @@ function viz_posterior_T₀(chain::Chains, i_obs::Int, T₀_prior::Distribution)
 	axvline([data2[1, "T [°C]"]], linestyle="dashed", color=the_colors["data"])
 	# the distn
 	θ₀s = range(0.0, 15.0, length=120)
-	ρ = get_kde_ρ(T₀.samples, 0.1)
+	ρ = get_kde_ρ(T₀.samples, 0.25)
 	plot(θ₀s, ρ.(θ₀s), color="black", linewidth=1)
 	fill_between(θ₀s, zeros(length(θ₀s)), ρ.(θ₀s), color=the_colors["posterior"])
 	plot([T₀.lb, T₀.ub], [0, 0], c="black", linewidth=10)
@@ -426,7 +497,8 @@ function viz_posterior_T₀(chain::Chains, i_obs::Int, T₀_prior::Distribution)
 	yticks([0])
 
 	# prior inset
-	inset = mpl_tk.inset_axes(ax, width="25%", height="25%", loc=1)
+	inset = ax.inset_axes([0.75, 0.7, 0.3, 0.3])
+	# inset = mpl_tk.inset_axes(ax, width="25%", height="25%", loc=1)
 	inset.set_xlabel(L"$\theta_0$ [°C]")
 	inset.set_ylabel("prior\ndensity")
 	inset.set_ylim(ymin=0)
@@ -452,6 +524,80 @@ end
 
 # ╔═╡ bd5602cd-8b6d-430f-a700-40b449d1da27
 viz_posterior_T₀(chain_T₀, i_obs, T₀_prior)
+
+# ╔═╡ ba77054e-1754-4c62-bce9-7e166bd99a6e
+viz_b4_after_inference(data2, fixed_params2, chain_T₀, i_obs=i_obs)
+
+# ╔═╡ e84e11c6-eba4-45de-82b7-d4f0c76e4c94
+gridspec = PyPlot.matplotlib.gridspec
+
+# ╔═╡ 8c8ce05d-45da-4a1a-bfce-457282e4237e
+function compare_prior_posterior_T₀(chain::Chains, prior::Distribution, fancy::Bool)
+	T₀ = analyze_posterior(chain, :T₀)
+
+	ylabels = ["prior\ndensity", "posterior\ndensity"]
+
+	if fancy
+		fig = figure(figsize=(7.0*0.9, 4.8*0.9))
+		gs = fig.add_gridspec(2, hspace=-0.6)
+		axs = gs.subplots(sharex=true, sharey=true)
+		for i = 1:2
+			rect = axs[i].patch
+			rect.set_alpha(0)
+		    for s in ["top","right","left","bottom"]
+				if s == "bottom"
+					continue
+				end
+		        axs[i].spines[s].set_visible(false)
+			end
+			axs[i].set_yticks([0])
+			axs[i].text(-0.25, 0.075, ylabels[i], 
+				transform=axs[i].transAxes)
+		end
+		axs[2].set_xlabel(L"initial temperature, $\theta_0$ [°C]")
+	else
+		fig, ax = myfig()
+		xlabel(L"initial temperature, $\theta_0$ [°C]")
+		axs = [ax, ax]
+	end
+	# axs[1].set_ylabel("prior\ndensity")
+	# axs[2].set_ylabel("posterior\ndensity")
+
+	# prior
+	θ₀s = vcat(range(-1.0, 16.0, length=100), [-0.001, 0.001, 14.9999, 15.0001])
+	sort!(θ₀s)
+	ρ_prior = [pdf(T₀_prior, θ₀) for θ₀ in θ₀s]
+	axs[1].plot(θ₀s, ρ_prior, color="black", linewidth=1)
+	axs[1].fill_between(θ₀s, zeros(length(θ₀s)), ρ_prior, 
+				color=the_colors["prior"], label="prior")
+	# posterior
+	axs[2].plot([T₀.lb, T₀.ub], zeros(2), color="black", linewidth=10, zorder=100)
+	# the data
+	axs[2].axvline([data2[1, "T [°C]"]], linestyle="dashed", 
+		color=the_colors["data"], zorder=1000)
+	# the distn
+	θ₀s = range(0.0, 15.0, length=120)
+	ρ = get_kde_ρ(T₀.samples, 0.1)
+	axs[2].plot(θ₀s, ρ.(θ₀s), color="black", linewidth=1, zorder=101)
+	axs[2].fill_between(θ₀s, zeros(length(θ₀s)), ρ.(θ₀s), 
+			color=the_colors["posterior"], label="posterior", zorder=100)
+	# the ci
+	axs[2].plot([T₀.lb, T₀.ub], [0, 0], c="black", linewidth=10, zorder=1000)
+	println("ci = ", round.([T₀.lb, T₀.ub], digits=2))
+
+	axs[1].set_ylim(ymin=0)
+	axs[1].set_xlim([-0.5, 15.5])
+	if ! fancy
+		legend(fontsize=15)
+		ylabel("density")
+	end
+	tight_layout()
+	# savefig("posterior_tau.pdf", format="pdf")
+	fig
+end
+
+# ╔═╡ 92ed3ea9-7ea2-42d5-b088-154de4c6a203
+compare_prior_posterior_T₀(chain_T₀, T₀_prior, false)
 
 # ╔═╡ d592943d-2402-4857-9509-4ae74dee26c4
 function viz_fit_T₀(data::DataFrame, i_obs::Int, Tₐ::Float64, chain::Chains, with_soln::Bool)
@@ -491,7 +637,7 @@ function viz_fit_T₀(data::DataFrame, i_obs::Int, Tₐ::Float64, chain::Chains,
 	# 	label="(tₖ, θ̰ₖ)", strokewidth=1, color=the_colors["data"])
 	# end
 
-	legend()
+	legend(loc="lower right")
 	xlim(-0.03*max_t/60, 1.03*max_t/60)
 	ylim(0, 20.0)
 	tight_layout()
@@ -505,6 +651,9 @@ viz_fit_T₀(data2, i_obs, fixed_params2.Tₐ, chain_T₀, false)
 
 # ╔═╡ 5b56d8fb-ac24-4ac5-82a7-a51b5a6eb73a
 viz_fit_T₀(data2, i_obs, fixed_params2.Tₐ, chain_T₀, true)
+
+# ╔═╡ 344c74f4-117f-4acc-a0d5-5c526293785e
+viz_b4_after_inference(data2, fixed_params2, chain_T₀, i_obs=i_obs)
 
 # ╔═╡ 1e5ba0b1-c129-410c-9048-89a75210fd40
 md"## the ill-posed inverse problem"
@@ -1756,6 +1905,8 @@ version = "17.4.0+0"
 # ╠═a1e622ae-7672-4ca2-bac2-7dcc0a500f1f
 # ╠═294e240f-c146-4ef3-b172-26e70ad3ed19
 # ╠═6c797a4b-f692-4312-b434-a662f5c41343
+# ╠═cd46a3c7-ae78-4f3c-8ba6-c4a55d598843
+# ╠═b6b05d1b-5e2f-4082-a7ef-1211024c700b
 # ╠═38bf810d-b588-426c-81e7-a036ea7083f3
 # ╠═e9941f5b-6490-4e04-aa36-32f7ac3d45f1
 # ╟─7a01dfaf-fae1-4a8c-a8a2-1ac973bf3197
@@ -1778,9 +1929,14 @@ version = "17.4.0+0"
 # ╠═3f954d0a-3f4e-43c9-b028-f2abdc83792a
 # ╠═282f22da-b95a-41b2-a98a-12c6acd7bc06
 # ╠═bd5602cd-8b6d-430f-a700-40b449d1da27
+# ╠═ba77054e-1754-4c62-bce9-7e166bd99a6e
+# ╠═e84e11c6-eba4-45de-82b7-d4f0c76e4c94
+# ╠═8c8ce05d-45da-4a1a-bfce-457282e4237e
+# ╠═92ed3ea9-7ea2-42d5-b088-154de4c6a203
 # ╠═d592943d-2402-4857-9509-4ae74dee26c4
 # ╠═007ae23e-7572-4075-859b-451b379be0e6
 # ╠═5b56d8fb-ac24-4ac5-82a7-a51b5a6eb73a
+# ╠═344c74f4-117f-4acc-a0d5-5c526293785e
 # ╟─1e5ba0b1-c129-410c-9048-89a75210fd40
 # ╠═da778a83-aa3d-427f-9cd7-eede559c5c37
 # ╠═8b1f8a44-612c-4032-93a7-7b0c21c47c31
