@@ -271,7 +271,7 @@ function viz_posterior_τ(chain::Chains, τ_prior::Distribution)
 	# posterior
 	println("ci = ", round.([τ.lb, τ.ub], digits=2))
 	tight_layout()
-	savefig("posterior_tau.pdf", format="pdf")
+	savefig("param_id_distn.pdf", format="pdf")
 	fig
 end
 
@@ -335,6 +335,12 @@ function viz_b4_after_inference(
 				label=L"test data$\{(t_i, θ_{\rm{obs},i})\}$", color="white")
 	end
 	for i = 1:2
+		for s in ["top","right"]
+			if s == "bottom"
+				continue
+			end
+			axs[i].spines[s].set_visible(false)
+		end
 		axs[i].set_xlabel(L"time, $t$ [hr]")
 		axs[i].axhline([fixed_params.Tₐ], linestyle="dashed", zorder=0,
 			color=the_colors["air"], label=i == 2 ? "" : L"$\theta^{\rm{air}}$")
@@ -371,7 +377,7 @@ function viz_b4_after_inference(
 	ylim(0, 20.0)
 	xlim(-0.03*max_t, 10.2)
 	tight_layout()
-	if ! isnothing(i_obs)
+	if isnothing(i_obs)
 		savefig("param_id_b4_after_BSI.pdf", format="pdf")
 	else
 		savefig("time_reversal_id_$(i_obs)_id_b4_after_BSI.pdf", format="pdf")
@@ -457,7 +463,7 @@ T₀_prior = Uniform(0.0, 15.0)
 end
 
 # ╔═╡ 62c5e645-285d-470e-b46b-00f0471b7329
-i_obs = 35 # and try 35
+i_obs = 30 # and try 35 and 30
 
 # ╔═╡ 07b22d3a-d616-4c89-98c6-d7ee1cd314b6
 data2[i_obs, :]
@@ -518,7 +524,7 @@ function viz_posterior_T₀(chain::Chains, i_obs::Int, T₀_prior::Distribution)
 	# posterior
 	println("ci = ", round.([T₀.lb, T₀.ub], digits=2))
 	tight_layout()
-	savefig("posterior_theta_zero_i_obs_$(i_obs).pdf", format="pdf")
+	savefig("time_reversal_I_distn_i_obs_$(i_obs).pdf", format="pdf")
 	fig
 end
 
