@@ -232,12 +232,14 @@ end
 # ╔═╡ 44963969-6883-4c7f-a6ed-4c6eac003dfe
 viz_convergence(chain_τ, "τ")
 
+# ╔═╡ 2378f74e-ccd6-41fd-89f5-6001b75ea741
+alpha = 0.4
+
 # ╔═╡ a1e622ae-7672-4ca2-bac2-7dcc0a500f1f
-function viz_posterior_prior(chain::Chains, prior::Distribution, var::String;
-	true_var=nothing
-	)
+function viz_posterior_prior(chain::Chains, prior::Distribution, 
+	                         var::String, savename::String;
+	                         true_var=nothing)
 	x = analyze_posterior(chain, var)
-	alpha = 0.4
 
 	# variable-specific stuff
 	xlabels = Dict(
@@ -304,13 +306,13 @@ function viz_posterior_prior(chain::Chains, prior::Distribution, var::String;
 
 	# # posterior
 	println("ci = ", round.([x.lb, x.ub], digits=2))
-	# tight_layout()
-	# savefig("param_id_distn.pdf", format="pdf")
+	tight_layout()
+	savefig(savename, format="pdf")
 	fig
 end
 
 # ╔═╡ 294e240f-c146-4ef3-b172-26e70ad3ed19
-viz_posterior_prior(chain_τ, τ_prior_1, "τ")
+viz_posterior_prior(chain_τ, τ_prior_1, "τ", "param_id_prior_posterior.pdf")
 
 # ╔═╡ cd46a3c7-ae78-4f3c-8ba6-c4a55d598843
 function viz_b4_after_inference(
@@ -475,7 +477,7 @@ chain_T₀ = sample(model_T₀, NUTS(), MCMCSerial(), 2_500, 3; progress=true)
 viz_convergence(chain_T₀, "T₀")
 
 # ╔═╡ bd5602cd-8b6d-430f-a700-40b449d1da27
-viz_posterior_prior(chain_T₀, T₀_prior, "T₀", true_var=data2[1, "T [°C]"])
+viz_posterior_prior(chain_T₀, T₀_prior, "T₀", "time_reversal_prior_posterior_id_$i_obs.pdf", true_var=data2[1, "T [°C]"])
 
 # ╔═╡ ba77054e-1754-4c62-bce9-7e166bd99a6e
 viz_b4_after_inference(data2, fixed_params2, chain_T₀, i_obs=i_obs)
@@ -580,54 +582,125 @@ end
 model_T₀_t₀ = likelihood_for_T₀_t₀(data2, i_obs, fixed_params2.Tₐ)
 
 # ╔═╡ 14bee7d1-dadc-41be-9ea0-1420cd68a121
-chain_T₀_t₀ = sample(model_T₀_t₀, NUTS(), 5_000; progress=true)
+chain_T₀_t₀ = sample(model_T₀_t₀, NUTS(), 10_000; progress=true)
 
-# ╔═╡ 5521a857-16c1-461a-b924-3f6e32e09f1a
-function viz_T₀_t₀_posterior_distn(chain_T₀_t₀::Chains)
-	fig = figure()
-	jp = Seaborn.jointplot(
-		x=DataFrame(chain_T₀_t₀)[:, :T₀], 
-		y=DataFrame(chain_T₀_t₀)[:, :t₀], 
-		kind="kde", color=the_colors["posterior"], fill=true,
-		xlim=(-0.5, 15.5), ylim=(-15.5/60, 15.5/60),
-		marginal_kws=Dict(:fill=>true, :color => "black", :facecolor=>the_colors["posterior"], :zorder=>100)
-	)
-	jp.ax_joint.scatter([data2[1, "T [°C]"]], [data2[1, "t [hr]"]], 		
-			color=the_colors["data"], edgecolor="black", zorder=10000)
-	jp.ax_joint.set_xlabel(L"initial temperature, $\theta_0$ [°C]")
-	jp.ax_joint.set_ylabel(L"time taken out of fridge, $t_0$ [hr]")
-	
-	jp.ax_marg_x.axvline([data2[1, "T [°C]"]], 
-		linestyle="dashed", color=the_colors["data"], zorder=1000)
-	jp.ax_marg_y.axhline([data2[1, "t [hr]"]], 
-		linestyle="dashed", color=the_colors["data"], zorder=1000)
+# ╔═╡ aaca06d8-0e20-4c53-9097-d69fe1ae3d83
+posterior_colormap = PyPlot.matplotlib.colors.LinearSegmentedColormap.from_list("my_cmap",
+	["white", the_colors["posterior"]])
 
-	# prior for context
-	jp.ax_joint.fill_between([T₀_prior.a, T₀_prior.b],
-		[t₀_prior.a, t₀_prior.a],
-		[t₀_prior.b, t₀_prior.b], 
-		color=the_colors["prior"], zorder=0
-	)
-	# marginal prior
-	for (pr, draw_on) in zip([T₀_prior, t₀_prior], [jp.ax_marg_x, jp.ax_marg_y])
-		xs = [pr.a, pr.b]
-		xs = vcat(xs .- 0.001, xs .+ 0.001)
-		sort!(xs)
-		ρ_prior = [pdf(pr, x) for x in xs]
-
-		draw_on.fill_between(xs, zeros(4), ρ_prior, 
-			color=the_colors["prior"], zorder=0)
-		draw_on.plot(xs, ρ_prior, 
-			color="black", linewidth=1, zorder=1)
-	end
-
-	tight_layout()
-	savefig("posterior_initial_temp_initial_time_i_obs_$i_obs.pdf", format="pdf")
-	return jp.fig
+# ╔═╡ 7824672b-e69d-435d-a8ab-d62f014374d3
+function get_ρ_posterior_t₀_T₀()
+	X = Matrix(DataFrame(chain_T₀_t₀)[:, [:T₀, :t₀]])
+	μ = mean(X, dims=1)
+	σ = std(X, dims=1)
+	X̂ = (X .- μ) ./ σ
+	kde = KernelDensity(bandwidth=0.05)
+	kde.fit(X̂)
+	return x -> exp(kde.score_samples((reshape(x, 1, 2) .- μ) ./ σ)[1])
 end
 
-# ╔═╡ 52accaa1-f52d-4da3-8a94-52f263a45f1f
-jp=viz_T₀_t₀_posterior_distn(chain_T₀_t₀)
+# ╔═╡ 58a95e76-01db-48c4-981b-d212aff54029
+function new_undetermined_viz()
+	fig = figure(figsize=(6, 6))
+	gs = fig.add_gridspec(2, 2,  width_ratios=(4, 1), height_ratios=(1, 4),
+	                      left=0.1, right=0.9, bottom=0.1, top=0.9,
+	                      wspace=0.05, hspace=0.05)
+	# Create the Axes.
+	ax_joint = fig.add_subplot(gs[2, 1])
+	ax_marg_x = fig.add_subplot(gs[1, 1], sharex=ax_joint)
+	ax_marg_y = fig.add_subplot(gs[2, 2], sharey=ax_joint)
+	for _ax in [ax_joint, ax_marg_x, ax_marg_y]
+	    _ax.spines["right"].set_visible(false)
+	    _ax.spines["top"].set_visible(false)
+	    _ax.xaxis.set_ticks_position("bottom")
+	    _ax.yaxis.set_ticks_position("left")
+	end
+	ax_marg_x.tick_params(axis="x", labelbottom=false)
+    ax_marg_y.tick_params(axis="y", labelleft=false)
+
+	# joint
+	T₀s = range(T₀_prior.a, T₀_prior.b, length=10)
+	t₀s = range(t₀_prior.a, t₀_prior.b, length=10)
+	ρs_post = zeros(length(T₀s), length(t₀s))
+	ρ_post = get_ρ_posterior_t₀_T₀()
+	for (i, T₀) in enumerate(T₀s)
+		for (j, t₀) in enumerate(t₀s)
+			ρs_post[i, j] = ρ_post([T₀, t₀])
+		end
+	end
+	ax_joint.contour(T₀s, t₀s, ρs_post, cmap=posterior_colormap)
+
+	ax_joint.plot(
+		[T₀_prior.a, T₀_prior.a, T₀_prior.b, T₀_prior.b, T₀_prior.a], 
+		[t₀_prior.a, t₀_prior.b, t₀_prior.b, t₀_prior.a, t₀_prior.a], 
+		color=the_colors["prior"])
+	
+	# ax_joint.hexbin(DataFrame(chain_T₀_t₀)[:, :T₀], DataFrame(chain_T₀_t₀)[:, :t₀],
+	# 	mincnt=1, gridsize=15, cmap=posterior_colormap, bins=[range(0, 1, length=3), range(0, 1, length=3)]
+	# )
+	# ax_joint.fill_between([T₀_prior.a, T₀_prior.b], [t₀_prior.a, t₀_prior.a],
+	# 	[t₀_prior.b, t₀_prior.b], alpha=0.1)
+	# 	color=the_colors["prior"], zorder=0, alpha=alpha)
+
+	# marginal prior and posterior, T₀
+	T₀s = [T₀_prior.a, T₀_prior.b]
+	T₀s = vcat(T₀s .- 0.000001, T₀s .+ 0.000001)
+	sort!(T₀s)
+	ρ_prior = [pdf(T₀_prior, T₀) for T₀ in T₀s]
+
+
+	ax_marg_x.plot(T₀s, ρ_prior, 
+		color=the_colors["prior"], zorder=1)
+	ax_marg_x.set_yticks([0])
+	ax_marg_x.set_ylim(ymin=0)
+		
+	ρ = get_kde_ρ(DataFrame(chain_T₀_t₀)[:, :T₀], bw["T₀"])
+	T₀s = collect(range(T₀_prior.a, T₀_prior.b, length=100))
+	ρ_posterior = ρ.(T₀s)
+	pushfirst!(ρ_posterior, 0.0)
+	pushfirst!(T₀s, T₀_prior.a)
+	ax_marg_x.plot(T₀s, ρ_posterior, 
+		color=the_colors["posterior"], zorder=2)
+
+	ax_marg_x.set_ylim(0, maximum(ρ_posterior)*1.1)
+	
+	# marginal prior, t₀
+	t₀s = [t₀_prior.a, t₀_prior.b]
+	t₀s = vcat(t₀s .- 0.000001, t₀s .+ 0.0000001)
+	sort!(t₀s)
+	ρ_prior = [pdf(t₀_prior, t₀) for t₀ in t₀s]
+
+	# ax_marg_y.fill_betweenx(t₀s, zeros(4), ρ_prior, 
+	# 	color=the_colors["prior"], zorder=0, alpha=alpha)
+	ax_marg_y.plot(ρ_prior, t₀s,
+		color=the_colors["prior"], zorder=1)
+	ax_marg_y.set_xticks([0])
+	ax_marg_y.set_xlim(xmin=0)
+
+	ρ = get_kde_ρ(DataFrame(chain_T₀_t₀)[:, :t₀], 0.05)
+	t₀s = collect(range(t₀_prior.a, t₀_prior.b, length=100))
+	ρ_posterior = ρ.(t₀s)
+	pushfirst!(ρ_posterior, 0.0)
+	pushfirst!(t₀s, t₀_prior.a)
+	push!(ρ_posterior, 0.0)
+	push!(t₀s, t₀_prior.b)
+	ax_marg_y.plot(ρ_posterior, t₀s, 
+		color=the_colors["posterior"], zorder=2)
+
+	ax_marg_y.set_xlim(0, maximum(ρ_posterior)*1.1)
+	
+	ax_joint.scatter([data2[1, "T [°C]"]], [data2[1, "t [hr]"]], 		
+			color=the_colors["data"], edgecolor="black", zorder=10000)
+	ax_joint.set_xlabel(L"initial temperature, $\theta_0$ [°C]")
+	ax_joint.set_ylabel(L"time taken out of fridge, $t_0$ [hr]")
+	ax_joint.set_ylim([-0.55, 0.55])
+	ax_joint.set_xlim([-0.5, 15.5])
+	savefig("time_reversal_II.pdf", format="pdf")
+	fig
+end
+
+# ╔═╡ 2c4dd342-4f55-4ad4-9ce8-5825544fdb98
+new_undetermined_viz()
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -1820,6 +1893,7 @@ version = "17.4.0+0"
 # ╠═44963969-6883-4c7f-a6ed-4c6eac003dfe
 # ╠═ff7e4fd8-e34b-478e-ab8a-2f35aba99ba6
 # ╠═788f5c20-7ebb-43e7-bd07-46aa6c9fd249
+# ╠═2378f74e-ccd6-41fd-89f5-6001b75ea741
 # ╠═a1e622ae-7672-4ca2-bac2-7dcc0a500f1f
 # ╠═294e240f-c146-4ef3-b172-26e70ad3ed19
 # ╠═cd46a3c7-ae78-4f3c-8ba6-c4a55d598843
@@ -1851,7 +1925,9 @@ version = "17.4.0+0"
 # ╠═8b1f8a44-612c-4032-93a7-7b0c21c47c31
 # ╠═845bdbf7-f30e-4f0c-a8db-6f272e76eec9
 # ╠═14bee7d1-dadc-41be-9ea0-1420cd68a121
-# ╠═5521a857-16c1-461a-b924-3f6e32e09f1a
-# ╠═52accaa1-f52d-4da3-8a94-52f263a45f1f
+# ╠═aaca06d8-0e20-4c53-9097-d69fe1ae3d83
+# ╠═7824672b-e69d-435d-a8ab-d62f014374d3
+# ╠═58a95e76-01db-48c4-981b-d212aff54029
+# ╠═2c4dd342-4f55-4ad4-9ce8-5825544fdb98
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
