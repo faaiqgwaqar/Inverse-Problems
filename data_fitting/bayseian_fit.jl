@@ -35,8 +35,8 @@ function wongcolors()
         (230/255, 159/255, 0/255), # orange
         (0/255, 158/255, 115/255), # green
         (204/255, 121/255, 167/255), # reddish purple
-    	# (86/255, 180/255, 233/255), # sky blue
-        # (213/255, 94/255, 0/255), # vermillion
+    	(86/255, 180/255, 233/255), # sky blue
+        (213/255, 94/255, 0/255), # vermillion
         (240/255, 228/255, 66/255), # yellow
     ]
 end
@@ -86,8 +86,8 @@ my_colors = wongcolors()# ColorSchemes.Set3_5 # sns.color_palette("Set3_5")# won
 the_colors = Dict("air"        => my_colors[1], 
 	              "data"       => my_colors[2],
 	              "model"      => my_colors[3], 
-	              "prior"      => my_colors[4],
-	              "posterior"  => my_colors[5])
+	              "prior"      => my_colors[5],
+	              "posterior"  => my_colors[end])
 
 # ╔═╡ ddee1dcf-41cd-4836-bd87-af688a009464
 # the_colors = Dict(key => (c.r, c.g, c.b) for (key, c) in _the_colors)
@@ -139,7 +139,11 @@ md"## model parameter identification
 run = 11
 
 # ╔═╡ d32079ef-7ebd-4645-9789-1d258b13b66f
-data = load("data_run_$run.jld2")["data"]
+begin
+	data = load("data_run_$run.jld2")["data"]
+	data[:, "t [hr]"] = data[:, "t [min]"] / 60
+	data
+end
 
 # ╔═╡ b8a3fc88-6e4d-457d-8582-f6302fb206ac
 fixed_params = (T₀=load("data_run_$run.jld2")["T₀"], 
@@ -149,7 +153,7 @@ fixed_params = (T₀=load("data_run_$run.jld2")["T₀"],
 σ_prior = Uniform(0.0, 1.0) # °C
 
 # ╔═╡ 7b8f64b9-9776-4385-a2f0-38f78d76ef79
-τ_prior_1 = Uniform(60.0 / 5, 60.0 * 5)
+τ_prior_1 = Uniform(1.0 / 5, 5.0) # hr
 
 # ╔═╡ ecd4ea3f-1775-4c4e-a679-f8e15eaad3f7
 @model function likelihood_for_τ(data, fixed_params)
@@ -159,7 +163,7 @@ fixed_params = (T₀=load("data_run_$run.jld2")["T₀"],
 
     # Observations.
     for i in 1:nrow(data)
-		tᵢ = data[i, "t [min]"]
+		tᵢ = data[i, "t [hr]"]
 		μ = T_model(tᵢ, τ, fixed_params.T₀, fixed_params.Tₐ)
         data[i, "T [°C]"] ~ Normal(μ, σ)
     end
@@ -173,8 +177,11 @@ model_τ = likelihood_for_τ(data, fixed_params)
 # ╔═╡ bb3ae6a9-5d87-4b90-978e-8674f6c5bd99
 chain_τ = sample(model_τ, NUTS(), MCMCSerial(), 2_500, 3; progress=true)
 
+# ╔═╡ 5478b192-677e-4296-8ce5-c6d0447898bc
+bw = Dict("τ" => 0.01, "T₀" => 0.5)
+
 # ╔═╡ ff7e4fd8-e34b-478e-ab8a-2f35aba99ba6
-function analyze_posterior(chain::Chains, param::Symbol)
+function analyze_posterior(chain::Chains, param::Union{String, Symbol})
 	θs = Array(chain[param])[:]
 	
 	μ = mean(θs)
@@ -196,33 +203,26 @@ end
 
 # ╔═╡ 9e78c280-c19b-469b-8a2b-3c9f4b92a2e5
 function viz_convergence(chain::Chains, var::String)
+	var_range = range(0.9 * minimum(chain[var]), 1.1 * maximum(chain[var]), length=120)
+	
+	labels = Dict("τ" => L"$\lambda$ [hr]", "T₀" => L"$\theta_0$ [°C]")
+	
 	f, ax = subplots(2, 1, figsize=(10, 6))
 	for (r, c) in enumerate(groupby(DataFrame(chain), "chain"))
 		ax[1].plot(c[:, "iteration"], c[:, var], linewidth=1)
-		if var == "τ"
-			τs = range(1.0, 1.15, length=120) * 60.0
-			ρ = get_kde_ρ(c[:, var], 0.1)
-			ax[2].plot(τs/60.0, ρ.(τs), label="chain $r", linewidth=1)
-			ax[2].set_xlim(minimum(τs)/60, maximum(τs)/60)
-		elseif var == "T₀"
-			T₀s = range(0.0, 15.0, length=120)
-			ρ = get_kde_ρ(c[:, var], 0.2)
-			ax[2].plot(T₀s, ρ.(T₀s), label="chain $r", linewidth=1)
-			ax[2].set_xlim(minimum(T₀s), maximum(T₀s))
-		end
+		
+		ρ = get_kde_ρ(c[:, var], bw[var])
+		ax[2].plot(var_range, ρ.(var_range), label="chain $r", linewidth=1)
+		ax[2].set_xlim(var_range[1], var_range[end])
+
 	end
 	ax[1].set_xlabel("iteration")
 	ax[1].set_xlim(minimum(DataFrame(chain)[:, "iteration"])-1, maximum(DataFrame(chain)[:, "iteration"])+1)
 	ax[2].set_ylabel("density")
 	ax[2].set_ylim(ymin=0)
 	ax[2].set_yticks([0])
-	if var == "τ"
-		ax[1].set_ylabel(L"$\lambda$ [hr]")
-		ax[2].set_xlabel(L"$\lambda$ [hr]")
-	elseif var == "T₀"
-		ax[1].set_ylabel(L"$\theta_0$ [°C]")
-		ax[2].set_xlabel(L"$\theta_0$ [°C]")
-	end
+	ax[1].set_ylabel(labels[var])
+	ax[2].set_xlabel(labels[var])
 	ax[2].legend()
 	tight_layout()
 	savefig("convergence_study.pdf", format="pdf")
@@ -233,84 +233,84 @@ end
 viz_convergence(chain_τ, "τ")
 
 # ╔═╡ a1e622ae-7672-4ca2-bac2-7dcc0a500f1f
-function viz_posterior_τ(chain::Chains, τ_prior::Distribution)
-	τ = analyze_posterior(chain, :τ)
+function viz_posterior_prior(chain::Chains, prior::Distribution, var::String;
+	true_var=nothing
+	)
+	x = analyze_posterior(chain, var)
+	alpha = 0.4
+
+	# variable-specific stuff
+	xlabels = Dict(
+		"τ" => L"time constant, $\lambda$ [hr]",
+		"T₀" => L"initial temperature, $\theta_0$ [°C]"
+	)
+	short_xlabels = Dict(
+		"τ" => L"$\lambda$ [hr]",
+		"T₀" => L"$\theta_0$ [°C]"
+	)
+	posterior_lims = Dict("τ" => [0.95, 1.2], "T₀" => [0.0, 15.0])
 	
 	fig, ax = myfig()
-	xlabel(L"time constant, $\lambda$ [hr]")
+	xlabel(xlabels[var])
 	ylabel("posterior density")
+
+	###
 	# posterior
-	τs = range(60.0, 70.0, length=120)
-	ρ = get_kde_ρ(τ.samples, 0.1)
-	plot(τs/60, ρ.(τs), color="black", linewidth=1)
-	fill_between(τs/60, zeros(length(τs)), ρ.(τs), color=the_colors["posterior"])
-	plot([τ.lb, τ.ub] / 60, [0, 0], c="black", linewidth=10)
-	# xlim(60, 70)
+	var_range = range(posterior_lims[var]..., length=150)
+	ρ = get_kde_ρ(x.samples, bw[var])
+	plot(var_range, ρ.(var_range), color="black", label="posterior")
+	fill_between(var_range, zeros(length(var_range)), ρ.(var_range),
+				 color=the_colors["posterior"], alpha=alpha)
+	
+	plot([x.lb, x.ub], [0, 0], c="gray", linewidth=5, clip_on=false)
+
+	if var == "T₀"
+		axvline([0], color="gray", linewidth=1)
+		xlim([-1, 16])
+	else
+		xlim(posterior_lims[var]...)
+	end
 	ylim(ymin=0)
 	yticks([0])
 
-	# prior inset
-	#inset = mpl_tk.inset_axes(ax, width="30%", height="30%", loc=1)
+	if ! isnothing(true_var)
+		axvline([true_var], linestyle="dashed", color=the_colors["data"])
+	end
+
+	###
+	# prior
 	inset = ax.inset_axes([0.75, 0.7, 0.3, 0.3])
-	inset.set_xlabel(L"$\lambda$ [hr]")
+	inset.set_xlabel(short_xlabels[var])
 	inset.set_ylabel("prior\ndensity")
 	inset.set_ylim(ymin=0)
-	τs = range(0.0, 250.0, length=100)
-	τs = vcat(τs, [τ_prior.a-0.001, τ_prior.a+0.001])
-	τs = vcat(τs, [τ_prior.b-0.001, τ_prior.b+0.001])
-	sort!(τs)
-	ρ_τ_prior = [pdf(τ_prior, τ) for τ in τs]
-	inset.plot(τs / 60.0, ρ_τ_prior, color="black", linewidth=1)
-	inset.fill_between(τs / 60.0, zeros(length(τs)), ρ_τ_prior, 
-		color=the_colors["prior"], alpha=0.4)
-	inset.set_xlim(-0.5, 5.5)
-	inset.axvline([0.0], color="gray", linewidth=1)
-	inset.set_ylim(0, maximum(ρ_τ_prior)*2)
+	
+	var_range = [prior.a, prior.b]
+	var_range = vcat(var_range .+ 0.0001, var_range .- 0.0001)
+	sort!(var_range)
+	ρ = [pdf(prior, x) for x in var_range]
+	inset.plot(var_range, ρ, color="black", label="prior")
+	inset.fill_between(var_range, zeros(length(var_range)), ρ,
+				 color=the_colors["prior"], alpha=alpha)
+	inset.axvline([0], color="gray", linewidth=1)
 	inset.set_yticks([0])
+	if var == "τ"
+		inset.set_xlim(-0.5, 5.5)
+	end
+	if var == "T₀"
+		inset.set_xticks([0, 5, 10, 15])
+		inset.set_xlim(-1, 16)
+	end
+	inset.set_ylim(0, maximum(ρ)*2)
 
-	# posterior
-	println("ci = ", round.([τ.lb, τ.ub], digits=2))
-	tight_layout()
-	savefig("param_id_distn.pdf", format="pdf")
+	# # posterior
+	println("ci = ", round.([x.lb, x.ub], digits=2))
+	# tight_layout()
+	# savefig("param_id_distn.pdf", format="pdf")
 	fig
 end
 
 # ╔═╡ 294e240f-c146-4ef3-b172-26e70ad3ed19
-viz_posterior_τ(chain_τ, τ_prior_1)
-
-# ╔═╡ 6c797a4b-f692-4312-b434-a662f5c41343
-function viz_fit_τ(data::DataFrame, 
-	               fixed_params::NamedTuple, 
-	               chain::Chains, 
-	               with_soln::Bool)
-	max_t = maximum(data[:, "t [min]"]) / 60.0
-    t = range(0.0, max_t * 1.05, length=200)
-	
-	fig, ax = myfig()
-	xlabel(L"time, $t$ [hr]")
-	ylabel("temperature [°C]")
-	axhline([fixed_params.Tₐ], linestyle="dashed", zorder=0,
-			color=the_colors["air"], label=with_soln ? "" : L"$\theta^{\rm{air}}$")
-
-	axvline([0.0], color="gray", linewidth=1, zorder=0)
-	scatter(data[:, "t [min]"] / 60.0, data[:, "T [°C]"], edgecolors="black",
-			label=with_soln ? "" : L"$\{(t_i, θ_{\rm{obs},i})\}_{i=0}^N$", color=the_colors["data"])
-	if with_soln
-		for (i, row) in enumerate(eachrow(DataFrame(sample(chain, 250, replace=false))))
-			plot(t, T_model.(t*60.0, row[:τ], fixed_params.T₀, fixed_params.Tₐ),
-	        	   color=the_colors["model"], alpha=0.1, 
-				  label= (i == 1) ? L"$\theta(t;\lambda)$" : "")
-		end
-	else
-
-	end
-	ylim(0, 20.0)
-	xlim(-0.03*max_t, 1.03*max_t)
-	legend(loc="lower right")
-	tight_layout()
-	savefig("find_tau" * (with_soln ? "_soln" : "_data") * ".pdf", format="pdf")
-	fig
-end
+viz_posterior_prior(chain_τ, τ_prior_1, "τ")
 
 # ╔═╡ cd46a3c7-ae78-4f3c-8ba6-c4a55d598843
 function viz_b4_after_inference(
@@ -319,7 +319,7 @@ function viz_b4_after_inference(
 	               chain::Chains;
 				   i_obs=nothing
 )
-	max_t = maximum(data[:, "t [min]"]) / 60.0
+	max_t = maximum(data[:, "t [hr]"])
     t = range(0.0, max_t * 1.05, length=200)
 	
 	fig, axs = subplots(1, 2, sharey=true, sharex=true,
@@ -346,11 +346,11 @@ function viz_b4_after_inference(
 			color=the_colors["air"], label=i == 2 ? "" : L"$\theta^{\rm{air}}$")
 		axs[i].axvline([0.0], color="gray", linewidth=1, zorder=0)
 		if isnothing(i_obs)
-			axs[i].scatter(data[:, "t [min]"] / 60.0, data[:, "T [°C]"], 	
+			axs[i].scatter(data[:, "t [hr]"], data[:, "T [°C]"], 	
 				edgecolors="black",
 				label=i == 2 ? "" : L"$\{(t_i, θ_{\rm{obs},i})\}_{i=0}^N$", color=the_colors["data"])
 		else
-			axs[i].scatter(data[i_obs, "t [min]"] / 60.0, data[i_obs, "T [°C]"], 	
+			axs[i].scatter(data[i_obs, "t [hr]"], data[i_obs, "T [°C]"], 	
 				edgecolors="black",
 				label=i == 2 ? "" : L"$(t_i\prime, θ_{\rm{obs}}\prime)$", color=the_colors["data"], zorder=1000)
 		end
@@ -361,11 +361,11 @@ function viz_b4_after_inference(
 
 	for (i, row) in enumerate(eachrow(DataFrame(sample(chain, 100, replace=false))))
 		if isnothing(i_obs)
-			axs[2].plot(t, T_model.(t*60.0, row[:τ], fixed_params.T₀, fixed_params.Tₐ),
+			axs[2].plot(t, T_model.(t, row[:τ], fixed_params.T₀, fixed_params.Tₐ),
 				  color=the_colors["model"], alpha=0.1, 
 				  label= (i == 1) ? L"$\theta(t;\lambda)$" : "")
 		else
-			axs[2].plot(t, T_model.(t*60.0, row[:τ], row[:T₀], fixed_params.Tₐ),
+			axs[2].plot(t, T_model.(t, row[:τ], row[:T₀], fixed_params.Tₐ),
 				  color=the_colors["model"], alpha=0.1, 
 				  label=(i == 1) ? L"$\theta(t;\theta_0)$" : "")
 		end
@@ -387,12 +387,6 @@ end
 
 # ╔═╡ b6b05d1b-5e2f-4082-a7ef-1211024c700b
 viz_b4_after_inference(data, fixed_params, chain_τ)
-
-# ╔═╡ 38bf810d-b588-426c-81e7-a036ea7083f3
-viz_fit_τ(data, fixed_params, chain_τ, false)
-
-# ╔═╡ e9941f5b-6490-4e04-aa36-32f7ac3d45f1
-viz_fit_τ(data, fixed_params, chain_τ, true)
 
 # ╔═╡ 7a01dfaf-fae1-4a8c-a8a2-1ac973bf3197
 md"correlation of τ and σ"
@@ -417,7 +411,10 @@ md"## time reversal problem"
 other_run = 12
 
 # ╔═╡ 8f145533-7208-4c25-9b1e-84370c7ac7ca
-data2 = load("data_run_$other_run.jld2")["data"]
+begin
+	data2 = load("data_run_$other_run.jld2")["data"]
+	data2[:, "t [hr]"] = data2[:, "t [min]"] / 60.0
+end
 
 # ╔═╡ 0bff14a8-89eb-488c-88c6-e08a64e577ed
 fixed_params2 = (T₀=load("data_run_$other_run.jld2")["T₀"], 
@@ -455,7 +452,7 @@ T₀_prior = Uniform(0.0, 15.0)
 	τ ~ τ_prior2
 
     # Observation
-	tᵢ = data[i_obs, "t [min]"]
+	tᵢ = data[i_obs, "t [hr]"]
 	μ = T_model(tᵢ, τ, T₀, Tₐ)
 	data[i_obs, "T [°C]"] ~ Normal(μ, σ)
 
@@ -463,7 +460,7 @@ T₀_prior = Uniform(0.0, 15.0)
 end
 
 # ╔═╡ 62c5e645-285d-470e-b46b-00f0471b7329
-i_obs = 30 # and try 35 and 30
+i_obs = 35 # and try 35 and 30
 
 # ╔═╡ 07b22d3a-d616-4c89-98c6-d7ee1cd314b6
 data2[i_obs, :]
@@ -477,59 +474,8 @@ chain_T₀ = sample(model_T₀, NUTS(), MCMCSerial(), 2_500, 3; progress=true)
 # ╔═╡ 3f954d0a-3f4e-43c9-b028-f2abdc83792a
 viz_convergence(chain_T₀, "T₀")
 
-# ╔═╡ 282f22da-b95a-41b2-a98a-12c6acd7bc06
-function viz_posterior_T₀(chain::Chains, i_obs::Int, T₀_prior::Distribution)
-	T₀ = analyze_posterior(chain_T₀, :T₀)
-
-	fig, ax = myfig()
-	###
-	# posterior
-	###
-	xlabel(L"initial temperature, $\theta_0$ [°C]")
-	ylabel("posterior density")
-	# confidence interval
-	plot([T₀.lb, T₀.ub], zeros(2), color="black", linewidth=10)
-	axvline([0.0], color="gray", linewidth=1)
-	# the data
-	axvline([data2[1, "T [°C]"]], linestyle="dashed", color=the_colors["data"])
-	# the distn
-	θ₀s = range(0.0, 15.0, length=120)
-	ρ = get_kde_ρ(T₀.samples, 0.25)
-	plot(θ₀s, ρ.(θ₀s), color="black", linewidth=1)
-	fill_between(θ₀s, zeros(length(θ₀s)), ρ.(θ₀s), color=the_colors["posterior"])
-	plot([T₀.lb, T₀.ub], [0, 0], c="black", linewidth=10)
-	xlim(0, 15)
-	ylim(ymin=0)
-	yticks([0])
-
-	# prior inset
-	inset = ax.inset_axes([0.75, 0.7, 0.3, 0.3])
-	# inset = mpl_tk.inset_axes(ax, width="25%", height="25%", loc=1)
-	inset.set_xlabel(L"$\theta_0$ [°C]")
-	inset.set_ylabel("prior\ndensity")
-	inset.set_ylim(ymin=0)
-	θ₀s = range(-1.0, 16.0, length=100)
-	θ₀s = vcat(θ₀s, [-0.001, 0.001, 14.9999, 15.0001])
-	sort!(θ₀s)
-	ρ_prior = [pdf(T₀_prior, θ₀) for θ₀ in θ₀s]
-	inset.plot(θ₀s, ρ_prior, color="black", linewidth=1)
-	inset.fill_between(θ₀s, zeros(length(θ₀s)), ρ_prior, 
-		color=the_colors["prior"], alpha=0.4)
-	inset.set_xlim(-0.5, 15.5)
-	inset.axvline([0.0], color="gray", linewidth=1, zorder=0)
-	inset.set_ylim(0, maximum(ρ_prior)*2)
-	inset.set_yticks([0])
-	inset.set_xticks([0, 5, 10, 15])
-
-	# posterior
-	println("ci = ", round.([T₀.lb, T₀.ub], digits=2))
-	tight_layout()
-	savefig("time_reversal_I_distn_i_obs_$(i_obs).pdf", format="pdf")
-	fig
-end
-
 # ╔═╡ bd5602cd-8b6d-430f-a700-40b449d1da27
-viz_posterior_T₀(chain_T₀, i_obs, T₀_prior)
+viz_posterior_prior(chain_T₀, T₀_prior, "T₀", true_var=data2[1, "T [°C]"])
 
 # ╔═╡ ba77054e-1754-4c62-bce9-7e166bd99a6e
 viz_b4_after_inference(data2, fixed_params2, chain_T₀, i_obs=i_obs)
@@ -538,6 +484,8 @@ viz_b4_after_inference(data2, fixed_params2, chain_T₀, i_obs=i_obs)
 gridspec = PyPlot.matplotlib.gridspec
 
 # ╔═╡ 8c8ce05d-45da-4a1a-bfce-457282e4237e
+# ╠═╡ disabled = true
+#=╠═╡
 function compare_prior_posterior_T₀(chain::Chains, prior::Distribution, fancy::Bool)
 	T₀ = analyze_posterior(chain, :T₀)
 
@@ -584,9 +532,9 @@ function compare_prior_posterior_T₀(chain::Chains, prior::Distribution, fancy:
 	# the distn
 	θ₀s = range(0.0, 15.0, length=120)
 	ρ = get_kde_ρ(T₀.samples, 0.1)
-	axs[2].plot(θ₀s, ρ.(θ₀s), color="black", linewidth=1, zorder=101)
-	axs[2].fill_between(θ₀s, zeros(length(θ₀s)), ρ.(θ₀s), 
-			color=the_colors["posterior"], label="posterior", zorder=100)
+	axs[2].plot(θ₀s, ρ.(θ₀s), color=the_colors["posterior"], linewidth=3, zorder=101, clip_on=false)
+	# axs[2].fill_between(θ₀s, zeros(length(θ₀s)), ρ.(θ₀s), 
+	# 		color=the_colors["posterior"], label="posterior", zorder=100)
 	# the ci
 	axs[2].plot([T₀.lb, T₀.ub], [0, 0], c="black", linewidth=10, zorder=1000)
 	println("ci = ", round.([T₀.lb, T₀.ub], digits=2))
@@ -601,71 +549,13 @@ function compare_prior_posterior_T₀(chain::Chains, prior::Distribution, fancy:
 	# savefig("posterior_tau.pdf", format="pdf")
 	fig
 end
-
-# ╔═╡ 92ed3ea9-7ea2-42d5-b088-154de4c6a203
-compare_prior_posterior_T₀(chain_T₀, T₀_prior, false)
-
-# ╔═╡ d592943d-2402-4857-9509-4ae74dee26c4
-function viz_fit_T₀(data::DataFrame, i_obs::Int, Tₐ::Float64, chain::Chains, with_soln::Bool)
-	max_t = maximum(data[:, "t [min]"])
-    t = range(0.0, max_t*1.05, length=200)
-
-	τ = analyze_posterior(chain, :τ)
-	T₀ = analyze_posterior(chain, :T₀)
-	
-	fig, ax = myfig()
-	xlabel(L"time, $t$ [hr]")
-	ylabel("temperature [°C]")
-
-	axvline([0.0], color="gray", linewidth=1)
-	axhline([fixed_params.Tₐ], linestyle="dashed", zorder=0,
-			color=the_colors["air"], label=with_soln ? "" : L"$\theta^{\rm{air}}$")
-
-	if with_soln
-		for (i, row) in enumerate(eachrow(DataFrame(sample(chain, 250, replace=false))))
-			plot(t/60, T_model.(t, row[:τ], row[:T₀], fixed_params.Tₐ),
-	        	color=the_colors["model"], alpha=0.1, 
-				label=i == 1 ? L"$\theta(t; \theta_0)$" : "")
-		end
-	end
-	if with_soln
-		scatter(data[:, "t [min]"] / 60.0, data[:, "T [°C]"], edgecolors="black",
-			label=with_soln ? "" : L"test data$\{(t_i, θ_{\rm{obs},i})\}$", color="white")
-	end
-	scatter([data[i_obs, "t [min]"]] / 60, [data[i_obs, "T [°C]"]], 
-		edgecolor="black", color=the_colors["data"], 
-		label=with_soln ? "" : L"$(t\prime, \theta_{\rm{obs}}\prime)$",zorder=100)
-	# if with_soln
-	# 	scatter!([data[i_obs, "t [min]"]], [data[i_obs, "T [°C]"]], 
-	# 	strokewidth=1, color=the_colors["data"])
-	# else
-	# 	scatter!([data[i_obs, "t [min]"]], [data[i_obs, "T [°C]"]], 
-	# 	label="(tₖ, θ̰ₖ)", strokewidth=1, color=the_colors["data"])
-	# end
-
-	legend(loc="lower right")
-	xlim(-0.03*max_t/60, 1.03*max_t/60)
-	ylim(0, 20.0)
-	tight_layout()
-	savefig("find_theta_zero_i_obs_$(i_obs)_" * (with_soln ? "soln" : "data") * ".pdf", format="pdf")
-
-	fig
-end
-
-# ╔═╡ 007ae23e-7572-4075-859b-451b379be0e6
-viz_fit_T₀(data2, i_obs, fixed_params2.Tₐ, chain_T₀, false)
-
-# ╔═╡ 5b56d8fb-ac24-4ac5-82a7-a51b5a6eb73a
-viz_fit_T₀(data2, i_obs, fixed_params2.Tₐ, chain_T₀, true)
-
-# ╔═╡ 344c74f4-117f-4acc-a0d5-5c526293785e
-viz_b4_after_inference(data2, fixed_params2, chain_T₀, i_obs=i_obs)
+  ╠═╡ =#
 
 # ╔═╡ 1e5ba0b1-c129-410c-9048-89a75210fd40
 md"## the ill-posed inverse problem"
 
 # ╔═╡ da778a83-aa3d-427f-9cd7-eede559c5c37
-t₀_prior = Uniform(-15, 15)
+t₀_prior = Uniform(-0.5, 0.5)
 
 # ╔═╡ 8b1f8a44-612c-4032-93a7-7b0c21c47c31
 @model function likelihood_for_T₀_t₀(data, i_obs, Tₐ)
@@ -679,7 +569,7 @@ t₀_prior = Uniform(-15, 15)
 	t₀ ~ t₀_prior
 
     # Observation
-	tᵢ = data[i_obs, "t [min]"]
+	tᵢ = data[i_obs, "t [hr]"]
 	μ = T_model(tᵢ, τ, T₀, Tₐ, t₀)
 	data[i_obs, "T [°C]"] ~ Normal(μ, σ)
 
@@ -697,18 +587,39 @@ function viz_T₀_t₀_posterior_distn(chain_T₀_t₀::Chains)
 	fig = figure()
 	jp = Seaborn.jointplot(
 		x=DataFrame(chain_T₀_t₀)[:, :T₀], 
-		y=DataFrame(chain_T₀_t₀)[:, :t₀] / 60, kind="kde", color=the_colors["posterior"], fill=true,
-		xlim=(0, 15), ylim=(-0.5, 0.5),
-		marginal_kws=Dict(:fill=>true, :color => "black", :facecolor=>the_colors["posterior"])
+		y=DataFrame(chain_T₀_t₀)[:, :t₀], 
+		kind="kde", color=the_colors["posterior"], fill=true,
+		xlim=(-0.5, 15.5), ylim=(-15.5/60, 15.5/60),
+		marginal_kws=Dict(:fill=>true, :color => "black", :facecolor=>the_colors["posterior"], :zorder=>100)
 	)
-	jp.ax_joint.scatter([data2[1, "T [°C]"]], [data2[1, "t [min]"]/60.0], 		
+	jp.ax_joint.scatter([data2[1, "T [°C]"]], [data2[1, "t [hr]"]], 		
 			color=the_colors["data"], edgecolor="black", zorder=10000)
 	jp.ax_joint.set_xlabel(L"initial temperature, $\theta_0$ [°C]")
 	jp.ax_joint.set_ylabel(L"time taken out of fridge, $t_0$ [hr]")
+	
 	jp.ax_marg_x.axvline([data2[1, "T [°C]"]], 
-		linestyle="dashed", color=the_colors["data"])
-	jp.ax_marg_y.axhline([data2[1, "t [min]"]], 
-		linestyle="dashed", color=the_colors["data"])
+		linestyle="dashed", color=the_colors["data"], zorder=1000)
+	jp.ax_marg_y.axhline([data2[1, "t [hr]"]], 
+		linestyle="dashed", color=the_colors["data"], zorder=1000)
+
+	# prior for context
+	jp.ax_joint.fill_between([T₀_prior.a, T₀_prior.b],
+		[t₀_prior.a, t₀_prior.a],
+		[t₀_prior.b, t₀_prior.b], 
+		color=the_colors["prior"], zorder=0
+	)
+	# marginal prior
+	for (pr, draw_on) in zip([T₀_prior, t₀_prior], [jp.ax_marg_x, jp.ax_marg_y])
+		xs = [pr.a, pr.b]
+		xs = vcat(xs .- 0.001, xs .+ 0.001)
+		sort!(xs)
+		ρ_prior = [pdf(pr, x) for x in xs]
+
+		draw_on.fill_between(xs, zeros(4), ρ_prior, 
+			color=the_colors["prior"], zorder=0)
+		draw_on.plot(xs, ρ_prior, 
+			color="black", linewidth=1, zorder=1)
+	end
 
 	tight_layout()
 	savefig("posterior_initial_temp_initial_time_i_obs_$i_obs.pdf", format="pdf")
@@ -1904,17 +1815,15 @@ version = "17.4.0+0"
 # ╠═ecd4ea3f-1775-4c4e-a679-f8e15eaad3f7
 # ╠═2e57666d-b3f4-451e-86fd-781217c1258d
 # ╠═bb3ae6a9-5d87-4b90-978e-8674f6c5bd99
+# ╠═5478b192-677e-4296-8ce5-c6d0447898bc
 # ╠═9e78c280-c19b-469b-8a2b-3c9f4b92a2e5
 # ╠═44963969-6883-4c7f-a6ed-4c6eac003dfe
 # ╠═ff7e4fd8-e34b-478e-ab8a-2f35aba99ba6
 # ╠═788f5c20-7ebb-43e7-bd07-46aa6c9fd249
 # ╠═a1e622ae-7672-4ca2-bac2-7dcc0a500f1f
 # ╠═294e240f-c146-4ef3-b172-26e70ad3ed19
-# ╠═6c797a4b-f692-4312-b434-a662f5c41343
 # ╠═cd46a3c7-ae78-4f3c-8ba6-c4a55d598843
 # ╠═b6b05d1b-5e2f-4082-a7ef-1211024c700b
-# ╠═38bf810d-b588-426c-81e7-a036ea7083f3
-# ╠═e9941f5b-6490-4e04-aa36-32f7ac3d45f1
 # ╟─7a01dfaf-fae1-4a8c-a8a2-1ac973bf3197
 # ╠═f20159ad-7f8b-484e-95ea-afdac97f876a
 # ╠═f184e3ea-82f9-49f4-afb6-99c609d7936f
@@ -1933,16 +1842,10 @@ version = "17.4.0+0"
 # ╠═efdf4047-81ab-45db-9980-267df2bad314
 # ╠═287fd4e2-3afd-4540-be15-f2a486e36e37
 # ╠═3f954d0a-3f4e-43c9-b028-f2abdc83792a
-# ╠═282f22da-b95a-41b2-a98a-12c6acd7bc06
 # ╠═bd5602cd-8b6d-430f-a700-40b449d1da27
 # ╠═ba77054e-1754-4c62-bce9-7e166bd99a6e
 # ╠═e84e11c6-eba4-45de-82b7-d4f0c76e4c94
 # ╠═8c8ce05d-45da-4a1a-bfce-457282e4237e
-# ╠═92ed3ea9-7ea2-42d5-b088-154de4c6a203
-# ╠═d592943d-2402-4857-9509-4ae74dee26c4
-# ╠═007ae23e-7572-4075-859b-451b379be0e6
-# ╠═5b56d8fb-ac24-4ac5-82a7-a51b5a6eb73a
-# ╠═344c74f4-117f-4acc-a0d5-5c526293785e
 # ╟─1e5ba0b1-c129-410c-9048-89a75210fd40
 # ╠═da778a83-aa3d-427f-9cd7-eede559c5c37
 # ╠═8b1f8a44-612c-4032-93a7-7b0c21c47c31
