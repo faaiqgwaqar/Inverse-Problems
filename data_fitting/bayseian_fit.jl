@@ -13,6 +13,9 @@ md"# Bayesian statistical inversion"
 # ╔═╡ edb44636-d6d4-400f-adc4-75b287a1f993
 TableOfContents()
 
+# ╔═╡ 7831a816-e8d4-49c5-b209-078e74e83c5f
+isdir("figs") ?  nothing : mkdir("figs")
+
 # ╔═╡ ae477150-45db-47ed-a6a8-018541cfe485
 mpl_tk = pyimport("mpl_toolkits.axes_grid1.inset_locator")
 
@@ -124,7 +127,7 @@ function viz_model_only()
 	inset.set_axis_off()
 	
 	tight_layout()
-	savefig("model_soln.pdf", format="pdf")
+	savefig("figs/model_soln.pdf", format="pdf")
 	return fig
 end
 
@@ -175,7 +178,10 @@ end
 model_τ = likelihood_for_τ(data, fixed_params)
 
 # ╔═╡ bb3ae6a9-5d87-4b90-978e-8674f6c5bd99
-chain_τ = sample(model_τ, NUTS(), MCMCSerial(), 2_500, 3; progress=true)
+chain_τ = sample(model_τ, NUTS(), MCMCSerial(), 2_500, 4; progress=true)
+
+# ╔═╡ f35c7dcd-243a-4a16-8f7d-424c583aa99f
+nrow(DataFrame(chain_τ))
 
 # ╔═╡ 5478b192-677e-4296-8ce5-c6d0447898bc
 bw = Dict("τ" => 0.01, "T₀" => 0.5)
@@ -225,7 +231,7 @@ function viz_convergence(chain::Chains, var::String)
 	ax[2].set_xlabel(labels[var])
 	ax[2].legend()
 	tight_layout()
-	savefig("convergence_study.pdf", format="pdf")
+	savefig("figs/convergence_study.pdf", format="pdf")
 	f
 end
 
@@ -307,7 +313,7 @@ function viz_posterior_prior(chain::Chains, prior::Distribution,
 	# # posterior
 	println("ci = ", round.([x.lb, x.ub], digits=2))
 	tight_layout()
-	savefig(savename, format="pdf")
+	savefig("figs/" * savename, format="pdf")
 	fig
 end
 
@@ -380,9 +386,9 @@ function viz_b4_after_inference(
 	xlim(-0.03*max_t, 10.2)
 	tight_layout()
 	if isnothing(i_obs)
-		savefig("param_id_b4_after_BSI.pdf", format="pdf")
+		savefig("figs/param_id_b4_after_BSI.pdf", format="pdf")
 	else
-		savefig("time_reversal_id_$(i_obs)_id_b4_after_BSI.pdf", format="pdf")
+		savefig("figs/time_reversal_id_$(i_obs)_id_b4_after_BSI.pdf", format="pdf")
 	end
 	return fig
 end
@@ -462,7 +468,7 @@ T₀_prior = Uniform(0.0, 15.0)
 end
 
 # ╔═╡ 62c5e645-285d-470e-b46b-00f0471b7329
-i_obs = 35 # and try 35 and 30
+i_obs = 30 # and try 35 and 30
 
 # ╔═╡ 07b22d3a-d616-4c89-98c6-d7ee1cd314b6
 data2[i_obs, :]
@@ -471,7 +477,7 @@ data2[i_obs, :]
 model_T₀ = likelihood_for_T₀(data2, i_obs, fixed_params2.Tₐ)
 
 # ╔═╡ 287fd4e2-3afd-4540-be15-f2a486e36e37
-chain_T₀ = sample(model_T₀, NUTS(), MCMCSerial(), 2_500, 3; progress=true)
+chain_T₀ = sample(model_T₀, NUTS(), MCMCSerial(), 2_500, 4; progress=true)
 
 # ╔═╡ 3f954d0a-3f4e-43c9-b028-f2abdc83792a
 viz_convergence(chain_T₀, "T₀")
@@ -582,7 +588,7 @@ end
 model_T₀_t₀ = likelihood_for_T₀_t₀(data2, i_obs, fixed_params2.Tₐ)
 
 # ╔═╡ 14bee7d1-dadc-41be-9ea0-1420cd68a121
-chain_T₀_t₀ = sample(model_T₀_t₀, NUTS(), 10_000; progress=true)
+chain_T₀_t₀ = sample(model_T₀_t₀, NUTS(), MCMCSerial(), 2_500, 4; progress=true)
 
 # ╔═╡ aaca06d8-0e20-4c53-9097-d69fe1ae3d83
 posterior_colormap = PyPlot.matplotlib.colors.LinearSegmentedColormap.from_list("my_cmap",
@@ -594,7 +600,7 @@ function get_ρ_posterior_t₀_T₀()
 	μ = mean(X, dims=1)
 	σ = std(X, dims=1)
 	X̂ = (X .- μ) ./ σ
-	kde = KernelDensity(bandwidth=0.05)
+	kde = KernelDensity(bandwidth=0.1)
 	kde.fit(X̂)
 	return x -> exp(kde.score_samples((reshape(x, 1, 2) .- μ) ./ σ)[1])
 end
@@ -619,13 +625,13 @@ function new_undetermined_viz()
     ax_marg_y.tick_params(axis="y", labelleft=false)
 
 	# joint
-	T₀s = range(T₀_prior.a, T₀_prior.b, length=10)
-	t₀s = range(t₀_prior.a, t₀_prior.b, length=10)
-	ρs_post = zeros(length(T₀s), length(t₀s))
+	T₀s = range(T₀_prior.a, T₀_prior.b, length=101)
+	t₀s = range(t₀_prior.a, t₀_prior.b, length=100)
+	ρs_post = zeros(length(t₀s), length(T₀s))
 	ρ_post = get_ρ_posterior_t₀_T₀()
 	for (i, T₀) in enumerate(T₀s)
 		for (j, t₀) in enumerate(t₀s)
-			ρs_post[i, j] = ρ_post([T₀, t₀])
+			ρs_post[j, i] = ρ_post([T₀, t₀])
 		end
 	end
 	ax_joint.contour(T₀s, t₀s, ρs_post, cmap=posterior_colormap)
@@ -695,12 +701,29 @@ function new_undetermined_viz()
 	ax_joint.set_ylabel(L"time taken out of fridge, $t_0$ [hr]")
 	ax_joint.set_ylim([-0.55, 0.55])
 	ax_joint.set_xlim([-0.5, 15.5])
-	savefig("time_reversal_II.pdf", format="pdf")
+	tight_layout()
+	savefig("figs/time_reversal_II.pdf", format="pdf")
 	fig
 end
 
 # ╔═╡ 2c4dd342-4f55-4ad4-9ce8-5825544fdb98
 new_undetermined_viz()
+
+# ╔═╡ f7af1845-cae4-4eae-ab99-140e145d9b39
+begin
+	fig = figure()
+	jp = sns.jointplot(
+		x=DataFrame(chain_T₀_t₀)[:, :T₀], 
+		y=DataFrame(chain_T₀_t₀)[:, :t₀], kind="kde"
+	)
+	jp.fig
+end
+
+# ╔═╡ da2ab292-058f-44c1-a2bf-77f874815873
+A = [1 0; 0 0]
+
+# ╔═╡ 4523845d-818a-4e13-8dca-175de7da55d5
+contour(A)
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -1862,6 +1885,7 @@ version = "17.4.0+0"
 # ╟─b1c06c4d-9b4d-4af3-9e9b-3ba993ca83a0
 # ╠═43bcf4b0-fbfc-11ec-0e23-bb05c02078c9
 # ╠═edb44636-d6d4-400f-adc4-75b287a1f993
+# ╠═7831a816-e8d4-49c5-b209-078e74e83c5f
 # ╠═ae477150-45db-47ed-a6a8-018541cfe485
 # ╠═2b4ee7f8-0cc0-458a-bb54-03c119dd2944
 # ╠═ad610936-99a3-42a1-800d-94e66051f605
@@ -1888,6 +1912,7 @@ version = "17.4.0+0"
 # ╠═ecd4ea3f-1775-4c4e-a679-f8e15eaad3f7
 # ╠═2e57666d-b3f4-451e-86fd-781217c1258d
 # ╠═bb3ae6a9-5d87-4b90-978e-8674f6c5bd99
+# ╠═f35c7dcd-243a-4a16-8f7d-424c583aa99f
 # ╠═5478b192-677e-4296-8ce5-c6d0447898bc
 # ╠═9e78c280-c19b-469b-8a2b-3c9f4b92a2e5
 # ╠═44963969-6883-4c7f-a6ed-4c6eac003dfe
@@ -1929,5 +1954,8 @@ version = "17.4.0+0"
 # ╠═7824672b-e69d-435d-a8ab-d62f014374d3
 # ╠═58a95e76-01db-48c4-981b-d212aff54029
 # ╠═2c4dd342-4f55-4ad4-9ce8-5825544fdb98
+# ╠═f7af1845-cae4-4eae-ab99-140e145d9b39
+# ╠═da2ab292-058f-44c1-a2bf-77f874815873
+# ╠═4523845d-818a-4e13-8dca-175de7da55d5
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
