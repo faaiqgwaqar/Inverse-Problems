@@ -199,6 +199,9 @@ function analyze_posterior(chain::Chains, param::Union{String, Symbol})
 	return (;μ=μ, σ=σ, lb=lb, ub=ub, samples=θs)
 end
 
+# ╔═╡ a8257d2e-fca8-4bd9-8733-f4034836bbb9
+analyze_posterior(chain_τ, "σ")
+
 # ╔═╡ 788f5c20-7ebb-43e7-bd07-46aa6c9fd249
 function get_kde_ρ(x::Vector{Float64}, bw::Float64)
 	kde = KernelDensity(bandwidth=bw)
@@ -468,7 +471,7 @@ T₀_prior = Uniform(0.0, 15.0)
 end
 
 # ╔═╡ 62c5e645-285d-470e-b46b-00f0471b7329
-i_obs = 30 # and try 35 and 30
+i_obs = 35 # and try 35 and 30
 
 # ╔═╡ 07b22d3a-d616-4c89-98c6-d7ee1cd314b6
 data2[i_obs, :]
@@ -623,7 +626,7 @@ function new_undetermined_viz()
 	end
 	ax_marg_x.tick_params(axis="x", labelbottom=false)
     ax_marg_y.tick_params(axis="y", labelleft=false)
-
+	tight_layout()
 	# joint
 	T₀s = range(T₀_prior.a, T₀_prior.b, length=101)
 	t₀s = range(t₀_prior.a, t₀_prior.b, length=100)
@@ -702,7 +705,7 @@ function new_undetermined_viz()
 	ax_joint.set_ylim([-0.55, 0.55])
 	ax_joint.set_xlim([-0.5, 15.5])
 	tight_layout()
-	savefig("figs/time_reversal_II.pdf", format="pdf")
+	savefig("figs/time_reversal_II.pdf", format="pdf", bbox_inches="tight")
 	fig
 end
 
@@ -1917,6 +1920,7 @@ version = "17.4.0+0"
 # ╠═9e78c280-c19b-469b-8a2b-3c9f4b92a2e5
 # ╠═44963969-6883-4c7f-a6ed-4c6eac003dfe
 # ╠═ff7e4fd8-e34b-478e-ab8a-2f35aba99ba6
+# ╠═a8257d2e-fca8-4bd9-8733-f4034836bbb9
 # ╠═788f5c20-7ebb-43e7-bd07-46aa6c9fd249
 # ╠═2378f74e-ccd6-41fd-89f5-6001b75ea741
 # ╠═a1e622ae-7672-4ca2-bac2-7dcc0a500f1f
