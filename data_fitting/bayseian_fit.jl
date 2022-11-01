@@ -608,6 +608,16 @@ function get_ρ_posterior_t₀_T₀()
 	return x -> exp(kde.score_samples((reshape(x, 1, 2) .- μ) ./ σ)[1])
 end
 
+# ╔═╡ b14d545e-bc9e-493b-877f-899ec4ddc8fc
+begin
+	# show curve of solutions
+	θ_0s = range(-1, 15.0, length=100)
+	t′ = data2[i_obs, "t [hr]"]
+	θ′ = data2[i_obs, "T [°C]"]
+	λ̄ = analyze_posterior(chain_τ, "τ").μ
+	t_0s = t′ .- λ̄ * log.((θ_0s .- fixed_params2.Tₐ) ./ (θ′ - fixed_params2.Tₐ))
+end
+
 # ╔═╡ 58a95e76-01db-48c4-981b-d212aff54029
 function new_undetermined_viz()
 	fig = figure(figsize=(6, 6))
@@ -699,18 +709,23 @@ function new_undetermined_viz()
 	ax_marg_y.set_xlim(0, maximum(ρ_posterior)*1.1)
 	
 	ax_joint.scatter([data2[1, "T [°C]"]], [data2[1, "t [hr]"]], 		
-			color=the_colors["data"], edgecolor="black", zorder=10000)
+			color=the_colors["data"], edgecolor="black", zorder=10000, label=L"$(t_0, \theta_0)$")
+	ax_joint.plot(θ_0s, t_0s, color=the_colors["model"], linewidth=1)
+	# ax_joint.legend()
 	ax_joint.set_xlabel(L"initial temperature, $\theta_0$ [°C]")
 	ax_joint.set_ylabel(L"time taken out of fridge, $t_0$ [hr]")
 	ax_joint.set_ylim([-0.55, 0.55])
 	ax_joint.set_xlim([-0.5, 15.5])
 	tight_layout()
-	savefig("figs/time_reversal_II.pdf", format="pdf", bbox_inches="tight")
+	savefig("figs/time_reversal_II_i_obs$i_obs.pdf", format="pdf", bbox_inches="tight")
 	fig
 end
 
 # ╔═╡ 2c4dd342-4f55-4ad4-9ce8-5825544fdb98
 new_undetermined_viz()
+
+# ╔═╡ 8ba02a50-98f8-4c83-9f4f-040a1aad8274
+md"to check..."
 
 # ╔═╡ f7af1845-cae4-4eae-ab99-140e145d9b39
 begin
@@ -719,8 +734,15 @@ begin
 		x=DataFrame(chain_T₀_t₀)[:, :T₀], 
 		y=DataFrame(chain_T₀_t₀)[:, :t₀], kind="kde"
 	)
+	jp.ax_joint.set_xlabel("θ_0")
+	jp.ax_joint.set_ylabel("t_0")
+	jp.ax_joint.plot(θ_0s, t_0s, color="r")
+
 	jp.fig
 end
+
+# ╔═╡ b31a6a61-8999-49de-b9b4-01d1f4f0d48a
+fixed_params2.Tₐ
 
 # ╔═╡ da2ab292-058f-44c1-a2bf-77f874815873
 A = [1 0; 0 0]
@@ -1956,9 +1978,12 @@ version = "17.4.0+0"
 # ╠═14bee7d1-dadc-41be-9ea0-1420cd68a121
 # ╠═aaca06d8-0e20-4c53-9097-d69fe1ae3d83
 # ╠═7824672b-e69d-435d-a8ab-d62f014374d3
+# ╠═b14d545e-bc9e-493b-877f-899ec4ddc8fc
 # ╠═58a95e76-01db-48c4-981b-d212aff54029
 # ╠═2c4dd342-4f55-4ad4-9ce8-5825544fdb98
+# ╟─8ba02a50-98f8-4c83-9f4f-040a1aad8274
 # ╠═f7af1845-cae4-4eae-ab99-140e145d9b39
+# ╠═b31a6a61-8999-49de-b9b4-01d1f4f0d48a
 # ╠═da2ab292-058f-44c1-a2bf-77f874815873
 # ╠═4523845d-818a-4e13-8dca-175de7da55d5
 # ╟─00000000-0000-0000-0000-000000000001
