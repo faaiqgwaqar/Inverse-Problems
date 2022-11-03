@@ -566,7 +566,7 @@ end
 md"## the ill-posed inverse problem"
 
 # ╔═╡ da778a83-aa3d-427f-9cd7-eede559c5c37
-t₀_prior = Uniform(-0.5, 0.5)
+t₀_prior = truncated(Normal(0.0, 0.25), -1.0, 1.0)
 
 # ╔═╡ 8b1f8a44-612c-4032-93a7-7b0c21c47c31
 @model function likelihood_for_T₀_t₀(data, i_obs, Tₐ)
@@ -596,6 +596,10 @@ chain_T₀_t₀ = sample(model_T₀_t₀, NUTS(), MCMCSerial(), 2_500, 4; progre
 # ╔═╡ aaca06d8-0e20-4c53-9097-d69fe1ae3d83
 posterior_colormap = PyPlot.matplotlib.colors.LinearSegmentedColormap.from_list("my_cmap",
 	["white", the_colors["posterior"]])
+
+# ╔═╡ d812222a-3d59-418e-a67c-4154e0fd6e23
+prior_colormap = PyPlot.matplotlib.colors.LinearSegmentedColormap.from_list("my_cmap",
+	["white", the_colors["prior"]])
 
 # ╔═╡ 7824672b-e69d-435d-a8ab-d62f014374d3
 function get_ρ_posterior_t₀_T₀()
@@ -637,22 +641,27 @@ function new_undetermined_viz()
 	ax_marg_x.tick_params(axis="x", labelbottom=false)
     ax_marg_y.tick_params(axis="y", labelleft=false)
 	tight_layout()
-	# joint
+	# joint plot
 	T₀s = range(T₀_prior.a, T₀_prior.b, length=101)
-	t₀s = range(t₀_prior.a, t₀_prior.b, length=100)
+	t₀s = range(-1.0, 1.0, length=100)
 	ρs_post = zeros(length(t₀s), length(T₀s))
+	ρs_prior = zeros(length(t₀s), length(T₀s))
 	ρ_post = get_ρ_posterior_t₀_T₀()
 	for (i, T₀) in enumerate(T₀s)
 		for (j, t₀) in enumerate(t₀s)
 			ρs_post[j, i] = ρ_post([T₀, t₀])
+			ρs_prior[j, i] = pdf(t₀_prior, t₀) * pdf(T₀_prior, T₀)
 		end
 	end
+	ax_joint.contour(T₀s, t₀s, ρs_prior, cmap=prior_colormap)
+	ax_joint.plot(θ_0s, t_0s, color="black", linewidth=1, linestyle="dashed")
 	ax_joint.contour(T₀s, t₀s, ρs_post, cmap=posterior_colormap)
+	
 
-	ax_joint.plot(
-		[T₀_prior.a, T₀_prior.a, T₀_prior.b, T₀_prior.b, T₀_prior.a], 
-		[t₀_prior.a, t₀_prior.b, t₀_prior.b, t₀_prior.a, t₀_prior.a], 
-		color=the_colors["prior"])
+	# ax_joint.plot(
+	# 	[T₀_prior.a, T₀_prior.a, T₀_prior.b, T₀_prior.b, T₀_prior.a], 
+	# 	[t₀_prior.a, t₀_prior.b, t₀_prior.b, t₀_prior.a, t₀_prior.a], 
+	# 	color=the_colors["prior"])
 	
 	# ax_joint.hexbin(DataFrame(chain_T₀_t₀)[:, :T₀], DataFrame(chain_T₀_t₀)[:, :t₀],
 	# 	mincnt=1, gridsize=15, cmap=posterior_colormap, bins=[range(0, 1, length=3), range(0, 1, length=3)]
@@ -684,9 +693,10 @@ function new_undetermined_viz()
 	ax_marg_x.set_ylim(0, maximum(ρ_posterior)*1.1)
 	
 	# marginal prior, t₀
-	t₀s = [t₀_prior.a, t₀_prior.b]
-	t₀s = vcat(t₀s .- 0.000001, t₀s .+ 0.0000001)
-	sort!(t₀s)
+	t₀s = range(-1.0, 1.0, length=150)
+	# t₀s = [t₀_prior.a, t₀_prior.b]
+	# t₀s = vcat(t₀s .- 0.000001, t₀s .+ 0.0000001)
+	# sort!(t₀s)
 	ρ_prior = [pdf(t₀_prior, t₀) for t₀ in t₀s]
 
 	# ax_marg_y.fill_betweenx(t₀s, zeros(4), ρ_prior, 
@@ -697,12 +707,12 @@ function new_undetermined_viz()
 	ax_marg_y.set_xlim(xmin=0)
 
 	ρ = get_kde_ρ(DataFrame(chain_T₀_t₀)[:, :t₀], 0.05)
-	t₀s = collect(range(t₀_prior.a, t₀_prior.b, length=100))
+	# t₀s = collect(range(t₀_prior.a, t₀_prior.b, length=100))
 	ρ_posterior = ρ.(t₀s)
-	pushfirst!(ρ_posterior, 0.0)
-	pushfirst!(t₀s, t₀_prior.a)
-	push!(ρ_posterior, 0.0)
-	push!(t₀s, t₀_prior.b)
+	# pushfirst!(ρ_posterior, 0.0)
+	# pushfirst!(t₀s, t₀_prior.a)
+	# push!(ρ_posterior, 0.0)
+	# push!(t₀s, t₀_prior.b)
 	ax_marg_y.plot(ρ_posterior, t₀s, 
 		color=the_colors["posterior"], zorder=2)
 
@@ -710,7 +720,6 @@ function new_undetermined_viz()
 	
 	ax_joint.scatter([data2[1, "T [°C]"]], [data2[1, "t [hr]"]], 		
 			color=the_colors["data"], edgecolor="black", zorder=10000, label=L"$(t_0, \theta_0)$")
-	ax_joint.plot(θ_0s, t_0s, color=the_colors["model"], linewidth=1)
 	# ax_joint.legend()
 	ax_joint.set_xlabel(L"initial temperature, $\theta_0$ [°C]")
 	ax_joint.set_ylabel(L"time taken out of fridge, $t_0$ [hr]")
@@ -1977,6 +1986,7 @@ version = "17.4.0+0"
 # ╠═845bdbf7-f30e-4f0c-a8db-6f272e76eec9
 # ╠═14bee7d1-dadc-41be-9ea0-1420cd68a121
 # ╠═aaca06d8-0e20-4c53-9097-d69fe1ae3d83
+# ╠═d812222a-3d59-418e-a67c-4154e0fd6e23
 # ╠═7824672b-e69d-435d-a8ab-d62f014374d3
 # ╠═b14d545e-bc9e-493b-877f-899ec4ddc8fc
 # ╠═58a95e76-01db-48c4-981b-d212aff54029
