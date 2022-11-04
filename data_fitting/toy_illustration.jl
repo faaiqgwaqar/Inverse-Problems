@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.11
+# v0.19.13
 
 using Markdown
 using InteractiveUtils
@@ -7,14 +7,24 @@ using InteractiveUtils
 # ╔═╡ 94182d54-3428-11ec-3014-d9cedb79f68a
 using Roots, CairoMakie, ColorSchemes, Roots, Optim, Printf, PlutoUI, Random, Colors, JLD2, DataFrames
 
-# ╔═╡ f2e95386-e5bc-4b90-9c32-43808a8ec8f6
-begin
-	include("dope_makie_theme.jl")
-	set_theme!(dope_theme)
-end
-
 # ╔═╡ 028c2d73-a4bb-46f2-9b5e-22273c2ca5ce
 TableOfContents()
+
+# ╔═╡ 4ce9857b-9723-4f5a-b348-10d7631c546c
+import AlgebraOfGraphics
+
+# ╔═╡ f2e95386-e5bc-4b90-9c32-43808a8ec8f6
+begin
+	AlgebraOfGraphics.set_aog_theme!(
+		fonts=[AlgebraOfGraphics.firasans("Light"), AlgebraOfGraphics.firasans("Light")])
+	update_theme!(
+		fontsize=20, 
+		linewidth=4,
+		markersize=14,
+		titlefont=AlgebraOfGraphics.firasans("Light"),
+		resolution=(0.8*500, 0.8*380)
+	)
+end
 
 # ╔═╡ 5a3522aa-4bd9-498b-bbf8-9e49523f22de
 function draw_axes!(ax)
@@ -23,7 +33,7 @@ function draw_axes!(ax)
 end
 
 # ╔═╡ 4b58f77f-b155-416f-8907-46b22d809c72
-colors = Dict(zip(["data", "model", "air"], my_colors[1:3]))
+colors = Dict(zip(["data", "model", "air"], my_colors[[2, 1 , 3]]))
 
 # ╔═╡ 3d8112be-ace6-4174-b31b-9896c556a019
 function viz_air_temp(ax, Tₐ::Float64)
@@ -35,26 +45,17 @@ end
 # ╔═╡ eaf92206-2a16-4b54-aa8d-a3c27fbe03e0
 md"# read data"
 
-# ╔═╡ 8bc8ab6b-df2d-4274-882e-1ce1f09daadc
-run = 11
-
 # ╔═╡ d5e96b70-0647-4979-9f61-6e9e4c906106
-data = load("data_run_$run.jld2")["data"]
+data = load("data_run_11.jld2")["data"]
 
 # ╔═╡ edd2f1e5-7644-41a3-b5a3-4a65d4f46dac
 filter!(row -> row["t [min]"] < 425.0, data)
 
 # ╔═╡ 081a1336-eb60-4198-9f44-a33973486460
-Tₐ = load("data_run_$run.jld2")["Tₐ"]
+Tₐ = load("data_run_11.jld2")["Tₐ"]
 
 # ╔═╡ 6348b57f-6ad4-4dd5-b964-1f88d7c5860e
-T₀ = load("data_run_$run.jld2")["T₀"]
-
-# ╔═╡ 929d4303-ba1c-4bbd-a57b-ea2cff0263ef
-τ = load("fit_data_run_$run.jld2")["τ"]
-
-# ╔═╡ 03897319-2e89-4819-b066-1ee5f2745e7b
-τ_ci = load("fit_data_run_$run.jld2")["τ_ci"]
+T₀ = load("data_run_11.jld2")["T₀"]
 
 # ╔═╡ 70721425-1988-48d9-b226-b5b36bc525a8
 begin
@@ -87,16 +88,147 @@ begin
 	T(t::Array{Float64, 1}, params::NamedTuple) = [T(tᵢ, params) for tᵢ in t]
 end
 
+# ╔═╡ e9212acc-7874-44ba-9921-73780c2c8e03
+function viz_model()
+	fig = Figure()
+	ax  = Axis(fig[1, 1], 
+		       xlabel="t / λ", 
+		       ylabel="θ(t)", 
+		       yticks=([0, 1], ["θ₀", "θᵃⁱʳ"])
+	)
+	ts_model = range(0.0, 4.0, length=200)
+	lines!(ts_model, 1.0 .- exp.(-ts_model), color=colors["model"])
+	hlines!(ax, 1.0, style=:dash, 
+			linestyle=:dot, label="θᵃⁱʳ", color=colors["air"])
+	ylims!(-0.1, 1.1)
+	xlims!(0, 4)
+	save("model_soln.pdf", fig)
+	return fig
+end
+
+# ╔═╡ 299faaae-4817-467c-b9b0-9147663dbc17
+viz_model()
+
 # ╔═╡ 331319e3-4d5f-4980-90e7-b13bf60c5867
 δ = 0.75
+
+# ╔═╡ bd89a236-15a9-45f0-85c9-e63b64c70728
+md"# param identification"
+
+# ╔═╡ a606ff46-73ac-44e0-95fe-b7b8cc6d0273
+function cost(τ::Float64, data::DataFrame)
+	params = (; τ=τ, t₀=0, T₀=data[1, "T [°C]"])
+    ℓ = 0.0
+    for row in eachrow(data)
+		tᵢ = row["t [min]"]
+		Tᵢ = row["T [°C]"]
+		
+        ℓ += (Tᵢ - T(tᵢ, params)) ^ 2
+    end
+    return ℓ / nrow(data)
+end
+
+# ╔═╡ 3cd1926a-2a6d-43b9-8dcc-fa1605b69b68
+opt_res = optimize(τ -> cost(τ, data), 0.0, 200.0)
+
+# ╔═╡ 9cbbe92a-c751-4d43-8672-98668fd46719
+τ_opt = opt_res.minimizer
+
+# ╔═╡ d683fdfb-b8ed-4729-a4e9-7c8c6ea77e3e
+function viz_loss(;τ_opt::Union{Float64, Nothing}=nothing)
+	τs = range(0.0, 203.0, length=100)
+	
+	fig = Figure()
+	ax  = Axis(fig[1, 1], 
+			   xlabel="time constant, τ [min]", 
+			   ylabel="loss, ℓ(τ) [(°C)²]")
+	lines!(τs, [cost(τ, data) for τ in τs])
+	xlims!(0.0, 202.0)
+	if ! isnothing(τ_opt)
+		vlines!(ax, τ_opt, linestyle=:dash, linewidth=1)
+	end
+	save("loss.pdf", fig)
+	fig
+end
+
+# ╔═╡ 9f44e375-2369-43d7-a562-497c76b9cb1a
+viz_loss(τ_opt=τ_opt)
 
 # ╔═╡ f091f0f1-aee9-403f-90f9-e58556f6c8dc
 md"# the forward problem"
 
+# ╔═╡ 6fec04ae-64bb-4e7f-b82e-96579368f9c5
+data2 = load("data_run_12.jld2")["data"]
+
+# ╔═╡ 51f5aa61-207b-4033-8b31-6bf6676254e0
+Tₐ2 = load("data_run_12.jld2")["Tₐ"]
+
+# ╔═╡ fd0ac159-1328-40ac-94cd-fdd4cc83f031
+T₀2 = load("data_run_12.jld2")["T₀"]
+
+# ╔═╡ bfd12fda-7dbb-4a9d-80ec-a506bb908336
+function viz_param_id(savename::String; plot_trajectory::Bool=true, 
+                     viz_errors::Bool=false, replicate::Bool=false)
+	params = (; T₀=T₀, Tₐ=Tₐ, t₀=0.0, τ=τ_opt)
+	if replicate
+		params = (; T₀=T₀2, Tₐ=Tₐ2, t₀=0.0, τ=τ_opt)
+	end
+	
+	fig = Figure()
+	ax  = Axis(fig[1, 1], 
+			   xlabel=the_xlabel, 
+			   ylabel=the_ylabel)
+	draw_axes!(ax)
+	viz_air_temp(ax, Tₐ)
+	if replicate
+		scatter!(data2[:, "t [min]"], data2[:, "T [°C]"], 
+			color=colors["data"], strokewidth=1, label="{(tᵢ, θᵢ)}")
+	else
+		scatter!(data[:, "t [min]"], data[:, "T [°C]"], 
+		color=colors["data"], strokewidth=1, label="{(tᵢ, θᵢ)}")
+	end
+	if plot_trajectory
+		lines!(t, T(t, params), color=colors["model"])
+	end
+	if viz_errors
+		errorbars!(data[:, "t [min]"], data[:, "T [°C]"], δ, δ, whiskerwidth=10, linewidth=3)
+		if plot_trajectory
+			lo_params = (; T₀=T₀, Tₐ=Tₐ, t₀=0.0, τ=τ_ci[2])
+			hi_params = (; T₀=T₀, Tₐ=Tₐ, t₀=0.0, τ=τ_ci[1])
+
+			band!(t, T(t, hi_params), T(t, lo_params), color=(colors["model"], 0.2))
+		end
+	end
+
+	vlines!(ax, [0.0], color="gray", linewidth=1)
+	xlims!(minimum(t), maximum(t))
+	if plot_trajectory
+		if ! viz_errors
+			axislegend(@sprintf("τ = %.1f min", τ_opt), position=:rb)
+		else
+			# axislegend(@sprintf("τ ∈ [%.1f, %.1f] min", τ_ci[1], τ_ci[2]), position=:rb)
+		end
+	else
+		axislegend(position=:rb)
+	end
+	ylims!(the_ylims...)
+	save(savename, fig)
+	fig
+end
+
+# ╔═╡ d76da2e4-dd8c-46d8-b084-88216b00353c
+viz_param_id("id_tau_setup.pdf", plot_trajectory=false)
+
+# ╔═╡ fa0bdadb-48a8-47c7-bc7c-e8be316228ce
+viz_param_id("id_tau_soln.pdf", plot_trajectory=true)
+
+# ╔═╡ 65e6a026-34ad-4df0-8176-00f713818ad0
+viz_param_id("replicate_fit.pdf", plot_trajectory=true, replicate=true)
+
 # ╔═╡ f07f7b5c-7723-4030-bf88-f060c8466a9c
 function viz_forward_problem(savename::String; 
 				             viz_error::Bool=true, plot_trajectory::Bool=true)
-	params = (; T₀=T₀, Tₐ=Tₐ, t₀=0.0, τ=τ)
+	params = (; T₀=T₀2, Tₐ=Tₐ2, t₀=0.0, τ=τ_opt)
 
 	fig = Figure()
 	ax  = Axis(fig[1, 1], 
@@ -105,8 +237,8 @@ function viz_forward_problem(savename::String;
 	draw_axes!(ax)
 	
 	if viz_error && plot_trajectory
-		lo_params = (; T₀=T₀ + δ, Tₐ=Tₐ, t₀=0.0, τ=τ)
-		hi_params = (; T₀=T₀ - δ, Tₐ=Tₐ, t₀=0.0, τ=τ)
+		lo_params = (; T₀=T₀ + δ, Tₐ=Tₐ, t₀=0.0, τ=τ_opt)
+		hi_params = (; T₀=T₀ - δ, Tₐ=Tₐ, t₀=0.0, τ=τ_opt)
 		T_top = T(t, hi_params)
 		T_bot = T(t, lo_params)
 		
@@ -130,7 +262,7 @@ function viz_forward_problem(savename::String;
 		linestyle=:dash, label="(t₀, θ₀)", 
 		strokewidth=2, color=colors["data"])
 	xlims!(minimum(t), maximum(t))
-	axislegend(@sprintf("τ = %.1f min", τ), position=:rb)
+	axislegend(@sprintf("τ = %.1f min", τ_opt), position=:rb)
 	ylims!(the_ylims...)
 	save(savename, fig)
 	return fig
@@ -151,56 +283,6 @@ viz_forward_problem("forward_soln_error.pdf", viz_error=true, plot_trajectory=tr
 # ╔═╡ ee98f55a-6196-4b18-87d6-4fb00996e0be
 md"# inverse problems"
 
-# ╔═╡ bd89a236-15a9-45f0-85c9-e63b64c70728
-md"## param identification"
-
-# ╔═╡ bfd12fda-7dbb-4a9d-80ec-a506bb908336
-function viz_param_id(savename::String; plot_trajectory::Bool=true, 
-                     viz_errors::Bool=false)
-	params = (; T₀=T₀, Tₐ=Tₐ, t₀=0.0, τ=τ)
-	
-	fig = Figure(resolution = (500, 400))
-	ax  = Axis(fig[1, 1], 
-			   xlabel=the_xlabel, 
-			   ylabel=the_ylabel)
-	draw_axes!(ax)
-	viz_air_temp(ax, Tₐ)
-	if plot_trajectory
-		lines!(t, T(t, params), color=colors["model"])
-	end
-	if viz_errors
-		errorbars!(data[:, "t [min]"], data[:, "T [°C]"], δ, δ, whiskerwidth=10, linewidth=3)
-		if plot_trajectory
-			lo_params = (; T₀=T₀, Tₐ=Tₐ, t₀=0.0, τ=τ_ci[2])
-			hi_params = (; T₀=T₀, Tₐ=Tₐ, t₀=0.0, τ=τ_ci[1])
-
-			band!(t, T(t, hi_params), T(t, lo_params), color=(colors["model"], 0.2))
-		end
-	end
-	scatter!(data[:, "t [min]"], data[:, "T [°C]"], 
-		color=colors["data"], strokewidth=1, label="{(tᵢ, θᵢ)}")
-	vlines!(ax, [0.0], color="gray", linewidth=1)
-	xlims!(minimum(t), maximum(t))
-	if plot_trajectory
-		if ! viz_errors
-			axislegend(@sprintf("τ = %.1f min", τ), position=:rb)
-		else
-			axislegend(@sprintf("τ ∈ [%.1f, %.1f] min", τ_ci[1], τ_ci[2]), position=:rb)
-		end
-	else
-		axislegend("τ = ?", position=:rb)
-	end
-	ylims!(the_ylims...)
-	save(savename, fig)
-	fig
-end
-
-# ╔═╡ d76da2e4-dd8c-46d8-b084-88216b00353c
-viz_param_id("id_tau_setup.pdf", plot_trajectory=false)
-
-# ╔═╡ fa0bdadb-48a8-47c7-bc7c-e8be316228ce
-viz_param_id("id_tau_soln.pdf", plot_trajectory=true)
-
 # ╔═╡ e16652ba-d11e-4f87-b3d6-5f019e8c2b5d
 viz_param_id("id_tau_setup_errors.pdf", plot_trajectory=false, viz_errors=true)
 
@@ -212,20 +294,20 @@ md"## time reversal"
 
 # ╔═╡ 4e3e686a-02e6-4fc7-89a7-3aebfdb6b351
 function viz_changing_T₀()
-	fig = Figure(resolution = (500, 400))
+	fig = Figure()
 	ax  = Axis(fig[1, 1], 
 			   xlabel=the_xlabel, 
 			   ylabel=the_ylabel)
 	T₀_range = range(0.0, 20.0, length=10)
 	for T₀ in T₀_range
-		params = (; T₀=T₀, Tₐ=Tₐ, t₀=0.0, τ=τ)
+		params = (; T₀=T₀, Tₐ=Tₐ, t₀=0.0, τ=τ_opt)
 		lines!(t, T(t, params), 
 			   color=T_to_color(T₀)
 		)
 	end
 	Colorbar(fig[1,2], limits=(0, 20), 
 		colormap=my_colormap, label="initial temperature, θ₀ [°C]")
-	text!(@sprintf("τ = %.1f min\nθᵃⁱʳ = %.1f °C\nt₀ = 0 min", τ, Tₐ), position=(225, 3))
+	text!(@sprintf("τ = %.1f min\nθᵃⁱʳ = %.1f °C", τ_opt, Tₐ), position=(200, 3), textsize=16)
 	ylims!(the_ylims...)
 	xlims!(minimum(t), maximum(t))
 	# axislegend(position=:rc)
@@ -239,7 +321,7 @@ viz_changing_T₀()
 # ╔═╡ 82b478ac-6156-48ca-8f59-206388e255a7
 function find_T₀(t′, T′, t₀=0.0)
 	function g(T₀)
-		params = (; T₀=T₀, Tₐ=Tₐ, t₀=t₀, τ=τ)
+		params = (; T₀=T₀, Tₐ=Tₐ, t₀=t₀, τ=τ_opt)
 		return T′ - T(t′, params)
 	end
 	return find_zero(g, (-5, 30), Bisection())
@@ -248,7 +330,7 @@ end
 # ╔═╡ 196eb94f-28d1-4e75-8670-8b87e36f0048
 function find_t₀(t′, T′)
 	function g(t₀)
-		params = (; T₀=T₀, Tₐ=Tₐ, t₀=t₀, τ=τ)
+		params = (; T₀=T₀, Tₐ=Tₐ, t₀=t₀, τ=τ_opt)
 		return T′ - T(t′, params)
 	end
 	return find_zero(g, (-5, 30), Bisection())
@@ -257,19 +339,19 @@ end
 # ╔═╡ 9e0255b0-13d0-4fd5-8aa0-19e04117545d
 function viz_time_reversal(savename::String, t′::Float64; viz_soln::Bool=true, viz_error::Bool=false)
 	# data is (t′, T′).
-	params = (; T₀=T₀, Tₐ=Tₐ, t₀=0.0, τ=τ)
+	params = (; T₀=T₀, Tₐ=Tₐ, t₀=0.0, τ=τ_opt)
 	T′ = T(t′, params)
 	
 	t_filtered = filter(x -> x <= t′, t)
 
 	# solution to inverse problem
 	T₀_ci  = [find_T₀(t′, T′ - δ), find_T₀(t′, T′ + δ)]
-	params_lo = (; T₀=T₀_ci[1], Tₐ=Tₐ, t₀=0.0, τ=τ)
-	params_hi = (; T₀=T₀_ci[2], Tₐ=Tₐ, t₀=0.0, τ=τ)
+	params_lo = (; T₀=T₀_ci[1], Tₐ=Tₐ, t₀=0.0, τ=τ_opt)
+	params_hi = (; T₀=T₀_ci[2], Tₐ=Tₐ, t₀=0.0, τ=τ_opt)
 	T_lo = T(t_filtered, params_lo)
 	T_hi = T(t_filtered, params_hi)
 	
-	fig = Figure(resolution = (500, 400))
+	fig = Figure()
 	ax  = Axis(fig[1, 1], 
 			   xlabel=the_xlabel, 
 			   ylabel=the_ylabel,
@@ -306,25 +388,25 @@ function viz_time_reversal(savename::String, t′::Float64; viz_soln::Bool=true,
 
 	ylims!(the_ylims...)
 	xlims!(minimum(t), maximum(t))
-	axislegend(@sprintf("τ = %.1f min\nt₀ = 0 min", τ), position=:rb)
+	axislegend(@sprintf("τ = %.1f min", τ_opt), position=:rb)
 	save(savename, fig)
 	return fig
 end
 
 # ╔═╡ 2482c26b-f570-4b04-8fe5-ac75a82d5660
-viz_time_reversal("time_reversal_setup.pdf", 60.0, viz_soln=false)
+viz_time_reversal("time_reversal_setup.pdf", 120.0, viz_soln=false)
 
 # ╔═╡ eaf6b0f5-ccb0-4e5c-bae1-cc82e34aee85
-viz_time_reversal("time_reversal_soln.pdf", 60.0, viz_soln=true)
+viz_time_reversal("time_reversal_soln.pdf", 120.0, viz_soln=true)
 
 # ╔═╡ 17b6d817-66ae-48e9-a2f1-847be0e6b02d
-viz_time_reversal("time_reversal_setup_errors.pdf", 30.0, viz_soln=false, viz_error=true)
+viz_time_reversal("time_reversal_setup_errors.pdf", 120.0, viz_soln=false, viz_error=true)
 
 # ╔═╡ d54e803f-621c-48d3-b50b-aadae0d71296
-viz_time_reversal("time_reversal_soln_errors.pdf", 30.0, viz_soln=true, viz_error=true)
+viz_time_reversal("time_reversal_soln_errors.pdf", 120.0, viz_soln=true, viz_error=true)
 
 # ╔═╡ a6574e8c-4ed7-4ec0-9b21-6f38c0141580
-viz_time_reversal("time_reversal_setup_errors_long.pdf", 2*60.0, viz_soln=false, viz_error=true)
+viz_time_reversal("time_reversal_setup_errors_long.pdf", 120.0, viz_soln=false, viz_error=true)
 
 # ╔═╡ cdb664e8-cf11-42e5-bd99-bd333f1e5d3a
 viz_time_reversal("time_reversal_soln_errors_long.pdf", 120.0, viz_soln=true, viz_error=true)
@@ -334,14 +416,14 @@ md"## infinite solutions"
 
 # ╔═╡ d2d0d681-0323-48fb-b521-c6fe4e006357
 function ic_params_list(t′::Float64; n::Int=10, t_start=0.0)
-	params = (; T₀=T₀, Tₐ=Tₐ, t₀=0.0, τ=τ)
+	params = (; T₀=T₀, Tₐ=Tₐ, t₀=0.0, τ=τ_opt)
 	T′ = T(t′, params)
 
 	t₀s = range(t_start, t′, length=n)[1:end-1]
 	param_list = []
 	for t₀ in t₀s
 		T₀ = find_T₀(t′, T′, t₀)
-		params = (; T₀=T₀, Tₐ=Tₐ, t₀=t₀, τ=τ)
+		params = (; T₀=T₀, Tₐ=Tₐ, t₀=t₀, τ=τ_opt)
 		push!(param_list, params)
 	end
 	return param_list
@@ -351,10 +433,10 @@ end
 function viz_infinite_soln(t′::Float64, savename::String; viz_solns::Bool=false)
 	ic_params = ic_params_list(t′)
 	t_filtered = filter(x -> x <= t′, t)
-	params = (; T₀=T₀, Tₐ=Tₐ, t₀=0.0, τ=τ)
+	params = (; T₀=T₀, Tₐ=Tₐ, t₀=0.0, τ=τ_opt)
 	T′ = T(t′, params)
 	
-	fig = Figure(resolution = (500, 400))
+	fig = Figure()
 	ax  = Axis(fig[1, 1], 
 			   xlabel=the_xlabel, 
 			   ylabel=the_ylabel)
@@ -374,7 +456,7 @@ function viz_infinite_soln(t′::Float64, savename::String; viz_solns::Bool=fals
 		end
 	end
 	scatter!([t′], [T′],
-		color="black", strokewidth=1,
+		color=colors["data"], strokewidth=1,
 		label="(t′, θ(t′))"
 	)
 
@@ -389,7 +471,7 @@ function viz_infinite_soln(t′::Float64, savename::String; viz_solns::Bool=fals
 		Colorbar(fig[1,2], limits=(0, t′), 
 			colormap=ColorSchemes.viridis, label="initial time, t₀ [min]")
 	end
-	axislegend(@sprintf("τ = %.1f min\n(t₀, θ₀) = ?", τ), position=:rb)
+	axislegend(@sprintf("τ = %.1f min\n(t₀, θ₀) = ?", τ_opt), position=:rb)
 	save(savename, fig)
 	fig
 end
@@ -432,6 +514,7 @@ viz_infinite_soln2(120.0, "viz_line_of_solns.pdf")
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
+AlgebraOfGraphics = "cbdf2221-f076-402e-a563-3d30da359d67"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 ColorSchemes = "35d6a980-a343-548e-a6ea-1d62b119f2f4"
 Colors = "5ae59095-9a9b-59fe-a467-6f913c188581"
@@ -444,6 +527,7 @@ Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 Roots = "f2b01f46-fcfa-551c-844a-d8ac1e96c665"
 
 [compat]
+AlgebraOfGraphics = "~0.6.0"
 CairoMakie = "~0.6.6"
 ColorSchemes = "~3.15.0"
 Colors = "~0.12.8"
@@ -474,6 +558,12 @@ deps = ["LinearAlgebra"]
 git-tree-sha1 = "84918055d15b3114ede17ac6a7182f68870c16f7"
 uuid = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
 version = "3.3.1"
+
+[[AlgebraOfGraphics]]
+deps = ["Colors", "Dates", "FileIO", "GLM", "GeoInterface", "GeometryBasics", "GridLayoutBase", "KernelDensity", "Loess", "Makie", "PlotUtils", "PooledArrays", "RelocatableFolders", "StatsBase", "StructArrays", "Tables"]
+git-tree-sha1 = "a79d1facb9fb0cd858e693088aa366e328109901"
+uuid = "cbdf2221-f076-402e-a563-3d30da359d67"
+version = "0.6.0"
 
 [[Animations]]
 deps = ["Colors"]
@@ -655,6 +745,12 @@ git-tree-sha1 = "7220bc21c33e990c14f4a9a319b1d242ebc5b269"
 uuid = "b552c78f-8df3-52c6-915a-8e097449b14b"
 version = "1.3.1"
 
+[[Distances]]
+deps = ["LinearAlgebra", "SparseArrays", "Statistics", "StatsAPI"]
+git-tree-sha1 = "3258d0659f812acde79e8a74b11f17ac06d0ca04"
+uuid = "b4f34e82-e78d-54a5-968a-f98e89d6e8f7"
+version = "0.10.7"
+
 [[Distributed]]
 deps = ["Random", "Serialization", "Sockets"]
 uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
@@ -790,6 +886,18 @@ version = "1.0.10+0"
 [[Future]]
 deps = ["Random"]
 uuid = "9fa8497b-333b-5362-9e8d-4d0656e87820"
+
+[[GLM]]
+deps = ["Distributions", "LinearAlgebra", "Printf", "Reexport", "SparseArrays", "SpecialFunctions", "Statistics", "StatsBase", "StatsFuns", "StatsModels"]
+git-tree-sha1 = "039118892476c2bf045a43b88fcb75ed566000ff"
+uuid = "38e38edf-8417-5370-95a0-9cbb8c7f171a"
+version = "1.8.0"
+
+[[GeoInterface]]
+deps = ["RecipesBase"]
+git-tree-sha1 = "6b1a29c757f56e0ae01a35918a2c39260e2c4b98"
+uuid = "cf35fbd7-0cd7-5166-be24-54bfbe79505f"
+version = "0.5.7"
 
 [[GeometryBasics]]
 deps = ["EarCut_jll", "IterTools", "LinearAlgebra", "StaticArrays", "StructArrays", "Tables"]
@@ -1054,6 +1162,12 @@ version = "7.1.1"
 [[LinearAlgebra]]
 deps = ["Libdl", "libblastrampoline_jll"]
 uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+
+[[Loess]]
+deps = ["Distances", "LinearAlgebra", "Statistics"]
+git-tree-sha1 = "46efcea75c890e5d820e670516dc156689851722"
+uuid = "4345ca2d-374a-55d4-8d30-97f9976e7612"
+version = "0.5.4"
 
 [[LogExpFunctions]]
 deps = ["ChainRulesCore", "DocStringExtensions", "InverseFunctions", "IrrationalConstants", "LinearAlgebra"]
@@ -1357,6 +1471,12 @@ git-tree-sha1 = "01d341f502250e81f6fec0afe662aa861392a3aa"
 uuid = "c84ed2f1-dad5-54f0-aa8e-dbefe2724439"
 version = "0.4.2"
 
+[[RecipesBase]]
+deps = ["SnoopPrecompile"]
+git-tree-sha1 = "d12e612bba40d189cead6ff857ddb67bd2e6a387"
+uuid = "3cdcf5f2-1ef4-517c-9805-6587b60abb01"
+version = "1.3.1"
+
 [[Reexport]]
 git-tree-sha1 = "45e428421666073eab6f2da5c9d310d99bb12f9b"
 uuid = "189a3867-3050-52da-a836-e630ba90ab69"
@@ -1426,6 +1546,11 @@ version = "0.8.0"
 deps = ["Distributed", "Mmap", "Random", "Serialization"]
 uuid = "1a1011a3-84de-559e-8e89-a11a2f7dc383"
 
+[[ShiftedArrays]]
+git-tree-sha1 = "503688b59397b3307443af35cd953a13e8005c16"
+uuid = "1277b4bf-5013-50f5-be3d-901d8477a67a"
+version = "2.0.0"
+
 [[Showoff]]
 deps = ["Dates", "Grisu"]
 git-tree-sha1 = "91eddf657aca81df9ae6ceb20b959ae5653ad1de"
@@ -1437,6 +1562,11 @@ deps = ["Random", "Statistics", "Test"]
 git-tree-sha1 = "d263a08ec505853a5ff1c1ebde2070419e3f28e9"
 uuid = "73760f76-fbc4-59ce-8f25-708e95d2df96"
 version = "0.4.0"
+
+[[SnoopPrecompile]]
+git-tree-sha1 = "f604441450a3c0569830946e5b33b78c928e1a85"
+uuid = "66db9d55-30c0-4569-8b51-7e840670fc0c"
+version = "1.0.1"
 
 [[Sockets]]
 uuid = "6462fe0b-24de-5631-8697-dd941f90decc"
@@ -1496,6 +1626,12 @@ git-tree-sha1 = "95072ef1a22b057b1e80f73c2a89ad238ae4cfff"
 uuid = "4c63d2b9-4356-54db-8cca-17b64c39e42c"
 version = "0.9.12"
 
+[[StatsModels]]
+deps = ["DataAPI", "DataStructures", "LinearAlgebra", "Printf", "REPL", "ShiftedArrays", "SparseArrays", "StatsBase", "StatsFuns", "Tables"]
+git-tree-sha1 = "a5e15f27abd2692ccb61a99e0854dfb7d48017db"
+uuid = "3eaba693-59b7-5ba5-a881-562e759f1c8d"
+version = "0.6.33"
+
 [[StructArrays]]
 deps = ["Adapt", "DataAPI", "StaticArrays", "Tables"]
 git-tree-sha1 = "2ce41e0d042c60ecd131e9fb7154a3bfadbf50d3"
@@ -1526,7 +1662,7 @@ version = "1.6.0"
 [[Tar]]
 deps = ["ArgTools", "SHA"]
 uuid = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
-version = "1.10.0"
+version = "1.10.1"
 
 [[TensorCore]]
 deps = ["LinearAlgebra"]
@@ -1700,33 +1836,42 @@ version = "3.5.0+0"
 # ╔═╡ Cell order:
 # ╠═94182d54-3428-11ec-3014-d9cedb79f68a
 # ╠═028c2d73-a4bb-46f2-9b5e-22273c2ca5ce
+# ╠═4ce9857b-9723-4f5a-b348-10d7631c546c
 # ╠═f2e95386-e5bc-4b90-9c32-43808a8ec8f6
 # ╠═5a3522aa-4bd9-498b-bbf8-9e49523f22de
 # ╠═3d8112be-ace6-4174-b31b-9896c556a019
 # ╠═4b58f77f-b155-416f-8907-46b22d809c72
 # ╟─eaf92206-2a16-4b54-aa8d-a3c27fbe03e0
-# ╠═8bc8ab6b-df2d-4274-882e-1ce1f09daadc
 # ╠═d5e96b70-0647-4979-9f61-6e9e4c906106
 # ╠═edd2f1e5-7644-41a3-b5a3-4a65d4f46dac
 # ╠═081a1336-eb60-4198-9f44-a33973486460
 # ╠═6348b57f-6ad4-4dd5-b964-1f88d7c5860e
-# ╠═929d4303-ba1c-4bbd-a57b-ea2cff0263ef
-# ╠═03897319-2e89-4819-b066-1ee5f2745e7b
 # ╠═70721425-1988-48d9-b226-b5b36bc525a8
 # ╠═5e4c2385-1171-4414-bc3c-a83bfff6abee
 # ╠═b5b9d1ad-92f1-43aa-8f08-49c5d09d3e71
+# ╠═e9212acc-7874-44ba-9921-73780c2c8e03
+# ╠═299faaae-4817-467c-b9b0-9147663dbc17
 # ╠═331319e3-4d5f-4980-90e7-b13bf60c5867
+# ╟─bd89a236-15a9-45f0-85c9-e63b64c70728
+# ╠═a606ff46-73ac-44e0-95fe-b7b8cc6d0273
+# ╠═3cd1926a-2a6d-43b9-8dcc-fa1605b69b68
+# ╠═9cbbe92a-c751-4d43-8672-98668fd46719
+# ╠═d683fdfb-b8ed-4729-a4e9-7c8c6ea77e3e
+# ╠═9f44e375-2369-43d7-a562-497c76b9cb1a
+# ╠═bfd12fda-7dbb-4a9d-80ec-a506bb908336
+# ╠═d76da2e4-dd8c-46d8-b084-88216b00353c
+# ╠═fa0bdadb-48a8-47c7-bc7c-e8be316228ce
+# ╠═65e6a026-34ad-4df0-8176-00f713818ad0
 # ╟─f091f0f1-aee9-403f-90f9-e58556f6c8dc
+# ╠═6fec04ae-64bb-4e7f-b82e-96579368f9c5
+# ╠═51f5aa61-207b-4033-8b31-6bf6676254e0
+# ╠═fd0ac159-1328-40ac-94cd-fdd4cc83f031
 # ╠═f07f7b5c-7723-4030-bf88-f060c8466a9c
 # ╠═cf4bada1-6b5d-40ab-909a-02ee580c5f40
 # ╠═d0b1d7d3-9f85-43e3-af8b-17d73c72777e
 # ╠═80b088dc-be57-46a5-8d18-5ed573837058
 # ╠═a9f095c4-50a1-41f7-9f66-01e11914f1c0
 # ╟─ee98f55a-6196-4b18-87d6-4fb00996e0be
-# ╟─bd89a236-15a9-45f0-85c9-e63b64c70728
-# ╠═bfd12fda-7dbb-4a9d-80ec-a506bb908336
-# ╠═d76da2e4-dd8c-46d8-b084-88216b00353c
-# ╠═fa0bdadb-48a8-47c7-bc7c-e8be316228ce
 # ╠═e16652ba-d11e-4f87-b3d6-5f019e8c2b5d
 # ╠═ca3b6534-9099-4ed8-8627-b85527307f5a
 # ╟─bb2fa8fb-32be-47a2-a659-7c3fa209d068
