@@ -184,7 +184,7 @@ chain_τ = sample(model_τ, NUTS(), MCMCSerial(), 2_500, 4; progress=true)
 nrow(DataFrame(chain_τ))
 
 # ╔═╡ 5478b192-677e-4296-8ce5-c6d0447898bc
-bw = Dict("τ" => 0.01, "T₀" => 0.5)
+bw = Dict("τ" => 0.01, "T₀" => 0.05)
 
 # ╔═╡ ff7e4fd8-e34b-478e-ab8a-2f35aba99ba6
 function analyze_posterior(chain::Chains, param::Union{String, Symbol})
@@ -202,8 +202,14 @@ end
 # ╔═╡ a8257d2e-fca8-4bd9-8733-f4034836bbb9
 analyze_posterior(chain_τ, "σ")
 
+# ╔═╡ ff9735a0-1fea-4518-a06a-0af74687ba9c
+function smart_bw(values::Array{Float64})
+	return 1.06 * std(values) * (length(values)) ^ (-1/5)
+end
+
 # ╔═╡ 788f5c20-7ebb-43e7-bd07-46aa6c9fd249
-function get_kde_ρ(x::Vector{Float64}, bw::Float64)
+function get_kde_ρ(x::Vector{Float64})
+	bw = smart_bw(x)
 	kde = KernelDensity(bandwidth=bw)
 	kde.fit(reshape(x, length(x), 1))
 
@@ -220,7 +226,7 @@ function viz_convergence(chain::Chains, var::String)
 	for (r, c) in enumerate(groupby(DataFrame(chain), "chain"))
 		ax[1].plot(c[:, "iteration"], c[:, var], linewidth=1)
 		
-		ρ = get_kde_ρ(c[:, var], bw[var])
+		ρ = get_kde_ρ(c[:, var])
 		ax[2].plot(var_range, ρ.(var_range), label="chain $r", linewidth=1)
 		ax[2].set_xlim(var_range[1], var_range[end])
 
@@ -268,7 +274,7 @@ function viz_posterior_prior(chain::Chains, prior::Distribution,
 	###
 	# posterior
 	var_range = range(posterior_lims[var]..., length=150)
-	ρ = get_kde_ρ(x.samples, bw[var])
+	ρ = get_kde_ρ(x.samples)
 	plot(var_range, ρ.(var_range), color="black", label="posterior")
 	fill_between(var_range, zeros(length(var_range)), ρ.(var_range),
 				 color=the_colors["posterior"], alpha=alpha)
@@ -308,8 +314,8 @@ function viz_posterior_prior(chain::Chains, prior::Distribution,
 		inset.set_xlim(-0.5, 5.5)
 	end
 	if var == "T₀"
-		inset.set_xticks([0, 5, 10, 15])
-		inset.set_xlim(-1, 16)
+		inset.set_xticks([0, 10, 20])
+		inset.set_xlim(-1, 21)
 	end
 	inset.set_ylim(0, maximum(ρ)*2)
 
@@ -450,13 +456,13 @@ end
 _σ_prior
 
 # ╔═╡ 8d358b8d-7432-421a-8661-4550c0457f97
-T₀_prior = Uniform(0.0, 15.0)
+T₀_prior = Uniform(0.0, fixed_params2.Tₐ)
 
 # ╔═╡ 8dbbbe1c-4eb6-4ac2-a447-bbaa500e03b4
 @model function likelihood_for_T₀(data, i_obs, Tₐ)
     # Prior distributions.
 	T₀ ~ T₀_prior
-	if data[i_obs, "T [°C]"] < 10.0
+	if data[i_obs, "T [°C]"] > T₀_prior.b
 		error("prior makes no sense")
 	end
 	σ ~ σ_prior2
@@ -470,17 +476,23 @@ T₀_prior = Uniform(0.0, 15.0)
     return nothing
 end
 
+# ╔═╡ a3ee46bf-9266-4025-8678-e535d0077faf
+function posterior_time_reversal(i_obs::Int)
+	model_T₀ = likelihood_for_T₀(data2, i_obs, fixed_params2.Tₐ)
+	chain_T₀ = sample(model_T₀, NUTS(), MCMCSerial(), 2_500, 4; progress=true)
+end
+
 # ╔═╡ 62c5e645-285d-470e-b46b-00f0471b7329
-i_obs = 35 # and try 35 and 30
+i_obs = 34 # and try 35 and 30
 
 # ╔═╡ 07b22d3a-d616-4c89-98c6-d7ee1cd314b6
 data2[i_obs, :]
 
 # ╔═╡ efdf4047-81ab-45db-9980-267df2bad314
-model_T₀ = likelihood_for_T₀(data2, i_obs, fixed_params2.Tₐ)
+chain_T₀ = posterior_time_reversal(i_obs)
 
-# ╔═╡ 287fd4e2-3afd-4540-be15-f2a486e36e37
-chain_T₀ = sample(model_T₀, NUTS(), MCMCSerial(), 2_500, 4; progress=true)
+# ╔═╡ 6e4c92c2-ab69-4ac7-9144-05cc3b8b0dd9
+nrow(DataFrame(chain_T₀))
 
 # ╔═╡ 3f954d0a-3f4e-43c9-b028-f2abdc83792a
 viz_convergence(chain_T₀, "T₀")
@@ -495,72 +507,53 @@ viz_b4_after_inference(data2, fixed_params2, chain_T₀, i_obs=i_obs)
 gridspec = PyPlot.matplotlib.gridspec
 
 # ╔═╡ 8c8ce05d-45da-4a1a-bfce-457282e4237e
-# ╠═╡ disabled = true
-#=╠═╡
-function compare_prior_posterior_T₀(chain::Chains, prior::Distribution, fancy::Bool)
-	T₀ = analyze_posterior(chain, :T₀)
+function ridge_plot()
 
-	ylabels = ["prior\ndensity", "posterior\ndensity"]
+	i_obs_list = 2:4:35
 
-	if fancy
-		fig = figure(figsize=(7.0*0.9, 4.8*0.9))
-		gs = fig.add_gridspec(2, hspace=-0.6)
-		axs = gs.subplots(sharex=true, sharey=true)
-		for i = 1:2
-			rect = axs[i].patch
-			rect.set_alpha(0)
-		    for s in ["top","right","left","bottom"]
-				if s == "bottom"
-					continue
-				end
-		        axs[i].spines[s].set_visible(false)
+	fig = figure(figsize=(7.0*0.9, 4.8*0.9))
+	gs = fig.add_gridspec(length(i_obs_list), hspace=-0.6)
+	axs = gs.subplots(sharex=true, sharey=true)
+
+	θ₀s = range(0.0, 15.0, length=100)
+	the_ymax = 0.0
+	for i = 1:length(i_obs_list)
+		rect = axs[i].patch
+		rect.set_alpha(0)
+		for s in ["top", "right", "left", "bottom"]
+			if s == "bottom"
+				continue
 			end
-			axs[i].set_yticks([0])
-			axs[i].text(-0.25, 0.075, ylabels[i], 
-				transform=axs[i].transAxes)
+			axs[i].spines[s].set_visible(false)
 		end
-		axs[2].set_xlabel(L"initial temperature, $\theta_0$ [°C]")
-	else
-		fig, ax = myfig()
-		xlabel(L"initial temperature, $\theta_0$ [°C]")
-		axs = [ax, ax]
-	end
-	# axs[1].set_ylabel("prior\ndensity")
-	# axs[2].set_ylabel("posterior\ndensity")
+		axs[i].set_yticks([])
+		
+		axs[i].set_xlim([0, 15])
+		t′ = data2[i_obs_list[i], "t [hr]"]
+		axs[i].text(-0.05, 0.075, "t′ = $(round(t′, digits=2)) hr",
+			transform=axs[i].transAxes)
+		if i != length(i_obs_list)
+			axs[i].set_xticks([])
+		end
+		# posterior
+		chain_T₀ = posterior_time_reversal(i_obs_list[i])
+		ρ = get_kde_ρ(analyze_posterior(chain_T₀, "T₀").samples)
+		ρ_post = ρ.(θ₀s)
+		axs[i].plot(θ₀s, ρ_post, color="black", linewidth=1)
+		axs[i].fill_between(θ₀s, zeros(length(θ₀s)), ρ_post, 
+					color=the_colors["prior"], label="prior", alpha=0.4)
 
-	# prior
-	θ₀s = vcat(range(-1.0, 16.0, length=100), [-0.001, 0.001, 14.9999, 15.0001])
-	sort!(θ₀s)
-	ρ_prior = [pdf(T₀_prior, θ₀) for θ₀ in θ₀s]
-	axs[1].plot(θ₀s, ρ_prior, color="black", linewidth=1)
-	axs[1].fill_between(θ₀s, zeros(length(θ₀s)), ρ_prior, 
-				color=the_colors["prior"], label="prior")
-	# posterior
-	axs[2].plot([T₀.lb, T₀.ub], zeros(2), color="black", linewidth=10, zorder=100)
-	# the data
-	axs[2].axvline([data2[1, "T [°C]"]], linestyle="dashed", 
-		color=the_colors["data"], zorder=1000)
-	# the distn
-	θ₀s = range(0.0, 15.0, length=120)
-	ρ = get_kde_ρ(T₀.samples, 0.1)
-	axs[2].plot(θ₀s, ρ.(θ₀s), color=the_colors["posterior"], linewidth=3, zorder=101, clip_on=false)
-	# axs[2].fill_between(θ₀s, zeros(length(θ₀s)), ρ.(θ₀s), 
-	# 		color=the_colors["posterior"], label="posterior", zorder=100)
-	# the ci
-	axs[2].plot([T₀.lb, T₀.ub], [0, 0], c="black", linewidth=10, zorder=1000)
-	println("ci = ", round.([T₀.lb, T₀.ub], digits=2))
-
-	axs[1].set_ylim(ymin=0)
-	axs[1].set_xlim([-0.5, 15.5])
-	if ! fancy
-		legend(fontsize=15)
-		ylabel("density")
+		the_ymax = maximum(vcat(ρ_post, [the_ymax]))
 	end
+	axs[1].set_ylim(0, the_ymax * 1.05)
+	axs[end].set_xlabel(L"initial temperature, $\theta_0$ [°C]")
 	tight_layout()
 	# savefig("posterior_tau.pdf", format="pdf")
 	fig
 end
-  ╠═╡ =#
+
+# ╔═╡ 3893d1d9-e98e-4aa1-8723-41e1c2b158fd
+ridge_plot()
 
 # ╔═╡ 1e5ba0b1-c129-410c-9048-89a75210fd40
 md"## the ill-posed inverse problem"
@@ -572,7 +565,7 @@ t₀_prior = truncated(Normal(0.0, 0.25), -1.0, 1.0)
 @model function likelihood_for_T₀_t₀(data, i_obs, Tₐ)
     # Prior distributions.
 	T₀ ~ T₀_prior
-	if data[i_obs, "T [°C]"] < 10.0
+	if data[i_obs, "T [°C]"] > T₀_prior.b
 		error("prior makes no sense")
 	end
 	σ ~ σ_prior2
@@ -682,7 +675,7 @@ function new_undetermined_viz()
 	ax_marg_x.set_yticks([0])
 	ax_marg_x.set_ylim(ymin=0)
 		
-	ρ = get_kde_ρ(DataFrame(chain_T₀_t₀)[:, :T₀], bw["T₀"])
+	ρ = get_kde_ρ(DataFrame(chain_T₀_t₀)[:, :T₀])
 	T₀s = collect(range(T₀_prior.a, T₀_prior.b, length=100))
 	ρ_posterior = ρ.(T₀s)
 	pushfirst!(ρ_posterior, 0.0)
@@ -706,7 +699,7 @@ function new_undetermined_viz()
 	ax_marg_y.set_xticks([0])
 	ax_marg_y.set_xlim(xmin=0)
 
-	ρ = get_kde_ρ(DataFrame(chain_T₀_t₀)[:, :t₀], 0.05)
+	ρ = get_kde_ρ(DataFrame(chain_T₀_t₀)[:, :t₀])
 	# t₀s = collect(range(t₀_prior.a, t₀_prior.b, length=100))
 	ρ_posterior = ρ.(t₀s)
 	# pushfirst!(ρ_posterior, 0.0)
@@ -1952,6 +1945,7 @@ version = "17.4.0+0"
 # ╠═44963969-6883-4c7f-a6ed-4c6eac003dfe
 # ╠═ff7e4fd8-e34b-478e-ab8a-2f35aba99ba6
 # ╠═a8257d2e-fca8-4bd9-8733-f4034836bbb9
+# ╠═ff9735a0-1fea-4518-a06a-0af74687ba9c
 # ╠═788f5c20-7ebb-43e7-bd07-46aa6c9fd249
 # ╠═2378f74e-ccd6-41fd-89f5-6001b75ea741
 # ╠═a1e622ae-7672-4ca2-bac2-7dcc0a500f1f
@@ -1971,15 +1965,17 @@ version = "17.4.0+0"
 # ╠═54efdfb6-bb64-4834-8cd9-a3f126f731e9
 # ╠═8d358b8d-7432-421a-8661-4550c0457f97
 # ╠═8dbbbe1c-4eb6-4ac2-a447-bbaa500e03b4
+# ╠═a3ee46bf-9266-4025-8678-e535d0077faf
 # ╠═62c5e645-285d-470e-b46b-00f0471b7329
 # ╠═07b22d3a-d616-4c89-98c6-d7ee1cd314b6
 # ╠═efdf4047-81ab-45db-9980-267df2bad314
-# ╠═287fd4e2-3afd-4540-be15-f2a486e36e37
+# ╠═6e4c92c2-ab69-4ac7-9144-05cc3b8b0dd9
 # ╠═3f954d0a-3f4e-43c9-b028-f2abdc83792a
 # ╠═bd5602cd-8b6d-430f-a700-40b449d1da27
 # ╠═ba77054e-1754-4c62-bce9-7e166bd99a6e
 # ╠═e84e11c6-eba4-45de-82b7-d4f0c76e4c94
 # ╠═8c8ce05d-45da-4a1a-bfce-457282e4237e
+# ╠═3893d1d9-e98e-4aa1-8723-41e1c2b158fd
 # ╟─1e5ba0b1-c129-410c-9048-89a75210fd40
 # ╠═da778a83-aa3d-427f-9cd7-eede559c5c37
 # ╠═8b1f8a44-612c-4032-93a7-7b0c21c47c31
