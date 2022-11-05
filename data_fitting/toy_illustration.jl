@@ -32,6 +32,9 @@ function draw_axes!(ax)
 	hlines!(ax, [0.0], color="gray", linewidth=1)
 end
 
+# ╔═╡ 7d8291bd-59d2-4b98-8dbb-424702bc7412
+my_colors = ColorSchemes.Dark2_5
+
 # ╔═╡ 4b58f77f-b155-416f-8907-46b22d809c72
 colors = Dict(zip(["data", "model", "air"], my_colors[[2, 1 , 3]]))
 
@@ -92,7 +95,7 @@ end
 function viz_model()
 	fig = Figure()
 	ax  = Axis(fig[1, 1], 
-		       xlabel="t / λ", 
+		       xlabel="t / τ", 
 		       ylabel="θ(t)", 
 		       yticks=([0, 1], ["θ₀", "θᵃⁱʳ"])
 	)
@@ -307,7 +310,7 @@ function viz_changing_T₀()
 	end
 	Colorbar(fig[1,2], limits=(0, 20), 
 		colormap=my_colormap, label="initial temperature, θ₀ [°C]")
-	text!(@sprintf("τ = %.1f min\nθᵃⁱʳ = %.1f °C", τ_opt, Tₐ), position=(200, 3), textsize=16)
+	text!(@sprintf("τ = %.1f min\nθᵃⁱʳ = %.1f °C", τ_opt, Tₐ), position=(200, 3), textsize=16, font=AlgebraOfGraphics.firasans("light"))
 	ylims!(the_ylims...)
 	xlims!(minimum(t), maximum(t))
 	# axislegend(position=:rc)
@@ -382,7 +385,7 @@ function viz_time_reversal(savename::String, t′::Float64; viz_soln::Bool=true,
 	)
 	if viz_soln
 		scatter!([0.0], [T₀], 
-			label="(t₀, T₀)", 
+			label="(t₀, θ₀)", 
 			strokewidth=2, color=colors["model"])
 	end
 
@@ -1840,6 +1843,7 @@ version = "3.5.0+0"
 # ╠═f2e95386-e5bc-4b90-9c32-43808a8ec8f6
 # ╠═5a3522aa-4bd9-498b-bbf8-9e49523f22de
 # ╠═3d8112be-ace6-4174-b31b-9896c556a019
+# ╠═7d8291bd-59d2-4b98-8dbb-424702bc7412
 # ╠═4b58f77f-b155-416f-8907-46b22d809c72
 # ╟─eaf92206-2a16-4b54-aa8d-a3c27fbe03e0
 # ╠═d5e96b70-0647-4979-9f61-6e9e4c906106
