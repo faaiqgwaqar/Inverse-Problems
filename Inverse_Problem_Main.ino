@@ -2,8 +2,6 @@
 
 // Use software SPI: CS, DI, DO, CLK
 Adafruit_MAX31865 thermo = Adafruit_MAX31865(10, 11, 12, 13);
-// Use hardware SPI, just pass in the CS pin
-//* Adafruit_MAX31865 thermo = Adafruit_MAX31865(10);*
 
 // The value of the Rref resistor.
 #define RREF      4300.0
