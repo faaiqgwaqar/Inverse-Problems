@@ -10,4 +10,4 @@ C and Julia code to reproduce the results of our paper:
 :tangerine: data processing code is found in the `data_fitting/` directory. To reproduce our results:
 
 
-![alt text](https://github.com/faaiqgwaqar/Inverse-Problems/blob/master/figures/hardware_setup.png?raw=true)
+![alt text](./figures/hardware_setup.png)
