@@ -9,4 +9,4 @@ C and Julia code to reproduce the results of our paper:
 
 :tangerine: data processing code is found in the `data_fitting/` directory. To reproduce our results:
 
-<img src="./figures/hardware_setup.png" alt="arduino" style="width:500px;" class="center"/>
+<img src="./figures/hardware_setup.png" alt="arduino" style="width:400px;" class="center"/>
