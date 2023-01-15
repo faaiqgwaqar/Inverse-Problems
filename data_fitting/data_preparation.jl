@@ -38,7 +38,7 @@ function read_data(filename::String)
 end
 
 # ╔═╡ 3c2e28af-1506-4ca6-be48-4e38bd67097d
-run = 11 # run 11 and 12
+run = 12 # run 11 and 12
 
 # ╔═╡ 60a97118-1fc1-403b-97fa-fce162e8d6fd
 filename = "limev$run.csv"
@@ -140,6 +140,12 @@ viz_data(downsampled_data, Tₐ, shld_i_save=true)
 # ╔═╡ a5535284-1d62-4748-b9c8-c28fa2dc3eb3
 md"## export data for other tasks"
 
+# ╔═╡ ac7665d4-d2ab-42f1-b9d5-f0ab7884e331
+downsampled_data[:, "t [hr]"] = downsampled_data[:, "t [min]"] / 60.0
+
+# ╔═╡ ed732170-4f38-4dec-ae73-d45822c7e490
+select!(downsampled_data, ["t [hr]", "T [°C]"])
+
 # ╔═╡ 322c60c0-1e04-4bd8-a3f9-2802e8deb605
 jldsave("data_run_$run.jld2"; data=downsampled_data, θ₀=T₀, θᵃⁱʳ=Tₐ)
 
@@ -167,4 +173,6 @@ jldsave("data_run_$run.jld2"; data=downsampled_data, θ₀=T₀, θᵃⁱʳ=Tₐ
 # ╠═31c49bdf-6e6e-495f-b20a-1805a88fc76f
 # ╠═9c6d23d9-fcc2-4704-86c5-50a13d6af2e0
 # ╟─a5535284-1d62-4748-b9c8-c28fa2dc3eb3
+# ╠═ac7665d4-d2ab-42f1-b9d5-f0ab7884e331
+# ╠═ed732170-4f38-4dec-ae73-d45822c7e490
 # ╠═322c60c0-1e04-4bd8-a3f9-2802e8deb605
