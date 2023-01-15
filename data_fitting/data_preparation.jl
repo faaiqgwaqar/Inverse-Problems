@@ -46,6 +46,14 @@ filename = "limev$run.csv"
 # ╔═╡ dba3e7ce-cf99-4ad7-b1fe-560aea998273
 data = read_data(filename)
 
+# ╔═╡ d0920710-db3f-4b23-8879-3aac8a45a5dd
+md"## air temperature
+take as after 4 hr.
+"
+
+# ╔═╡ 5fddc914-4df3-476f-9dfe-53e7bff1e38c
+T̄ₐ = mean(filter(row -> row["t [min]"] > 400, data)[:, "T [°C]"])
+
 # ╔═╡ 2c062784-d93d-4077-aa33-ffb62ba947f3
 md"use only first 10 hrs"
 
@@ -87,7 +95,7 @@ function viz_data(data::DataFrame, Tₐ=nothing; shld_i_save::Bool=false)
 end
 
 # ╔═╡ 5d3acc22-3a32-4ff6-9a25-cd9a7594a34a
-viz_data(data)
+viz_data(data, T̄ₐ)
 
 # ╔═╡ f07ab15c-fe20-4138-a28e-6eca0f774ef5
 md"## downsample
@@ -126,16 +134,14 @@ end
 # ╔═╡ e35322f8-5065-43ef-a846-77de00f4d065
 downsampled_data = downsample(data, 4, 5)
 
-# ╔═╡ d0920710-db3f-4b23-8879-3aac8a45a5dd
-md"## air temperature
-take as last measurement
-"
+# ╔═╡ e51f13f6-a48f-4ced-a028-62e8f745b7c3
+T̄ₐ
 
 # ╔═╡ 31c49bdf-6e6e-495f-b20a-1805a88fc76f
 Tₐ = data[end, "T [°C]"]
 
 # ╔═╡ 9c6d23d9-fcc2-4704-86c5-50a13d6af2e0
-viz_data(downsampled_data, Tₐ, shld_i_save=true)
+viz_data(downsampled_data, T̄ₐ, shld_i_save=true)
 
 # ╔═╡ a5535284-1d62-4748-b9c8-c28fa2dc3eb3
 md"## export data for other tasks"
@@ -146,8 +152,11 @@ downsampled_data[:, "t [hr]"] = downsampled_data[:, "t [min]"] / 60.0
 # ╔═╡ ed732170-4f38-4dec-ae73-d45822c7e490
 select!(downsampled_data, ["t [hr]", "T [°C]"])
 
+# ╔═╡ 221e0b99-e2ac-47f9-90ff-ab7263d2e178
+rename!(downsampled_data, "T [°C]" => "θ [°C]")
+
 # ╔═╡ 322c60c0-1e04-4bd8-a3f9-2802e8deb605
-jldsave("data_run_$run.jld2"; data=downsampled_data, θ₀=T₀, θᵃⁱʳ=Tₐ)
+jldsave("data_run_$run.jld2"; data=downsampled_data, θᵃⁱʳ=T̄ₐ)
 
 # ╔═╡ Cell order:
 # ╠═38925e1a-817b-4575-9768-02fb68bec2d6
@@ -158,6 +167,8 @@ jldsave("data_run_$run.jld2"; data=downsampled_data, θ₀=T₀, θᵃⁱʳ=Tₐ
 # ╠═3c2e28af-1506-4ca6-be48-4e38bd67097d
 # ╠═60a97118-1fc1-403b-97fa-fce162e8d6fd
 # ╠═dba3e7ce-cf99-4ad7-b1fe-560aea998273
+# ╟─d0920710-db3f-4b23-8879-3aac8a45a5dd
+# ╠═5fddc914-4df3-476f-9dfe-53e7bff1e38c
 # ╟─2c062784-d93d-4077-aa33-ffb62ba947f3
 # ╠═da39d074-f729-4442-8072-34423f743d63
 # ╟─c2e1bf81-e416-4b93-9d83-84129f9c6001
@@ -169,10 +180,11 @@ jldsave("data_run_$run.jld2"; data=downsampled_data, θ₀=T₀, θᵃⁱʳ=Tₐ
 # ╠═a84116af-b2e4-4853-aff9-f19738ae5733
 # ╠═f950ade9-1a1a-4398-a954-635d03599afa
 # ╠═e35322f8-5065-43ef-a846-77de00f4d065
-# ╟─d0920710-db3f-4b23-8879-3aac8a45a5dd
+# ╠═e51f13f6-a48f-4ced-a028-62e8f745b7c3
 # ╠═31c49bdf-6e6e-495f-b20a-1805a88fc76f
 # ╠═9c6d23d9-fcc2-4704-86c5-50a13d6af2e0
 # ╟─a5535284-1d62-4748-b9c8-c28fa2dc3eb3
 # ╠═ac7665d4-d2ab-42f1-b9d5-f0ab7884e331
 # ╠═ed732170-4f38-4dec-ae73-d45822c7e490
+# ╠═221e0b99-e2ac-47f9-90ff-ab7263d2e178
 # ╠═322c60c0-1e04-4bd8-a3f9-2802e8deb605
