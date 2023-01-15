@@ -17,8 +17,21 @@ md"# Bayesian statistical inversion"
 begin
 	import AlgebraOfGraphics as AoG
 	AoG.set_aog_theme!(fonts=[AoG.firasans("Light"), AoG.firasans("Light")])
-	update_theme!(fontsize=20, linewidth=3, resolution=(500, 400))
+	the_resolution = (0.9*500, 0.9*380)
+	update_theme!(
+		fontsize=20, 
+		linewidth=4,
+		markersize=14,
+		titlefont=AoG.firasans("Light"),
+		resolution=the_resolution
+	)
 end
+
+# ╔═╡ 509e3000-a94d-431c-9a4e-2ba1c6f148a3
+import ScikitLearn as skl
+
+# ╔═╡ cc8f82f7-a8db-4f45-8ccc-fa5b171eb3e7
+skl.@sk_import neighbors: KernelDensity
 
 # ╔═╡ edb44636-d6d4-400f-adc4-75b287a1f993
 TableOfContents()
@@ -33,18 +46,18 @@ my_colors = AoG.wongcolors()
 the_colors = Dict("air"        => my_colors[1], 
 	              "data"       => my_colors[2],
 	              "model"      => my_colors[3], 
-	              "prior"      => my_colors[5],
-	              "posterior"  => my_colors[end])
+	              "prior"      => my_colors[4],
+	              "posterior"  => my_colors[5])
 
 # ╔═╡ 3ae0b235-5ade-4c30-89ac-7f0480c0da11
-md"## the forward model"
+md"## the model"
 
 # ╔═╡ a13ba151-99c1-47ae-b96e-dc90464990b6
-function θ_model(t::Float64, params)
+function θ_model(t, λ, t₀, θ₀, θᵃⁱʳ)
     if t < 0.0
-        return params.θ₀
+        return θ₀
 	end
-    return params.θᵃⁱʳ .+ (params.θ₀ - params.θᵃⁱʳ) * exp(-(t - params.t₀) / params.λ)
+    return θᵃⁱʳ .+ (θ₀ - θᵃⁱʳ) * exp(-(t - t₀) / λ)
 end
 
 # ╔═╡ ee7fd372-22b0-4bf5-a5e9-5e3a5b6e1843
@@ -61,8 +74,7 @@ function viz_model_only()
 	)
 
 	# draw model
-	_params = (t₀=0.0, θ₀=0, θᵃⁱʳ=1, λ=1)
-	lines!(ts_model, [θ_model(tᵢ, _params) for tᵢ in ts_model],
+	lines!(ts_model, [θ_model(tᵢ, 1, 0, 0, 1) for tᵢ in ts_model],
 		   color=the_colors["model"])
 
 	# draw air temp
@@ -89,57 +101,8 @@ end
 # ╔═╡ 8ee1b06d-c255-4ae3-ac8b-06f7498dbf76
 viz_model_only()
 
-# ╔═╡ b29797b9-7e2f-4d55-bc39-dba5ad7663de
-md"## model parameter identification
-"
-
-# ╔═╡ 269ac9fa-13f3-443a-8669-e8f13d3518a6
-run = 11
-
-# ╔═╡ d32079ef-7ebd-4645-9789-1d258b13b66f
-begin
-	data = load("data_run_$run.jld2")["data"]
-	data[:, "t [hr]"] = data[:, "t [min]"] / 60
-	data
-end
-
-# ╔═╡ b8a3fc88-6e4d-457d-8582-f6302fb206ac
-fixed_params = (T₀=load("data_run_$run.jld2")["T₀"], 
-                Tₐ=load("data_run_$run.jld2")["Tₐ"])
-
-# ╔═╡ ce178132-a07d-4154-83b4-5f536c8f77aa
-σ_prior = Uniform(0.0, 1.0) # °C
-
-# ╔═╡ 7b8f64b9-9776-4385-a2f0-38f78d76ef79
-τ_prior_1 = Uniform(1.0 / 5, 5.0) # hr
-
-# ╔═╡ ecd4ea3f-1775-4c4e-a679-f8e15eaad3f7
-@model function likelihood_for_τ(data, fixed_params)
-    # Prior distributions.
-    σ ~ σ_prior
-	τ ~ τ_prior_1
-
-    # Observations.
-    for i in 1:nrow(data)
-		tᵢ = data[i, "t [hr]"]
-		μ = T_model(tᵢ, τ, fixed_params.T₀, fixed_params.Tₐ)
-        data[i, "T [°C]"] ~ Normal(μ, σ)
-    end
-
-    return nothing
-end
-
-# ╔═╡ 2e57666d-b3f4-451e-86fd-781217c1258d
-model_τ = likelihood_for_τ(data, fixed_params)
-
-# ╔═╡ bb3ae6a9-5d87-4b90-978e-8674f6c5bd99
-chain_τ = sample(model_τ, NUTS(), MCMCSerial(), 2_500, 4; progress=true)
-
-# ╔═╡ f35c7dcd-243a-4a16-8f7d-424c583aa99f
-nrow(DataFrame(chain_τ))
-
-# ╔═╡ 5478b192-677e-4296-8ce5-c6d0447898bc
-bw = Dict("τ" => 0.01, "T₀" => 0.05)
+# ╔═╡ 38304191-f930-41a6-8545-4734a5ad4ecf
+md"## helpers for BSI"
 
 # ╔═╡ ff7e4fd8-e34b-478e-ab8a-2f35aba99ba6
 function analyze_posterior(chain::Chains, param::Union{String, Symbol})
@@ -154,17 +117,105 @@ function analyze_posterior(chain::Chains, param::Union{String, Symbol})
 	return (;μ=μ, σ=σ, lb=lb, ub=ub, samples=θs)
 end
 
-# ╔═╡ a8257d2e-fca8-4bd9-8733-f4034836bbb9
-analyze_posterior(chain_τ, "σ")
+# ╔═╡ b29797b9-7e2f-4d55-bc39-dba5ad7663de
+md"## parameter identification
 
-# ╔═╡ ff9735a0-1fea-4518-a06a-0af74687ba9c
-function smart_bw(values::Array{Float64})
-	return 1.06 * std(values) * (length(values)) ^ (-1/5)
+🥝 read in data.
+"
+
+# ╔═╡ 269ac9fa-13f3-443a-8669-e8f13d3518a6
+run = 11
+
+# ╔═╡ d32079ef-7ebd-4645-9789-1d258b13b66f
+data = load("data_run_$run.jld2")["data"]
+
+# ╔═╡ b2b83a4e-54b0-4743-80c2-d81ac2d394e2
+θᵃⁱʳ = data[end, "θ [°C]"]
+
+# ╔═╡ 2da4df4f-7bd1-4a40-97f3-4861c486e2d6
+function viz_data(data::DataFrame, θᵃⁱʳ::Float64; savename=nothing)
+	max_t = maximum(data[:, "t [hr]"])
+	
+	fig = Figure()
+	ax  = Axis(fig[1, 1], 
+		       xlabel="time, t [hr]",
+		       ylabel="lime temperature [°C]",
+	)
+	
+	vlines!(ax, [0.0], color="gray", linewidth=1)
+	# air temp
+	hlines!(ax, θᵃⁱʳ, style=:dash, linestyle=:dot, 
+		label=rich("θ", superscript("air")), color=the_colors["air"])
+	# data
+	scatter!(data[:, "t [hr]"], data[:, "θ [°C]"], 
+		label=rich("{(t", subscript("i"), ", θ", subscript("i,obs"), ")}"), strokewidth=1, color=the_colors["data"])
+	axislegend(position=:rb)
+	xlims!(-0.03*max_t, 1.03*max_t)
+	if ! isnothing(savename)
+		save(savename, fig)
+	end
+	fig
 end
+
+# ╔═╡ a4192388-5fca-4d61-9cc0-27029032b765
+viz_data(data, θᵃⁱʳ)
+
+# ╔═╡ f6f7051d-95c0-4a15-86eb-74fb56d46691
+md"🥝 priors"
+
+# ╔═╡ ce178132-a07d-4154-83b4-5f536c8f77aa
+σ_prior = Uniform(0.0, 1.0) # °C
+
+# ╔═╡ 7b8f64b9-9776-4385-a2f0-38f78d76ef79
+λ_prior = truncated(Normal(1.0, 0.3), 0.0, nothing) # hr
+
+# ╔═╡ ecd4ea3f-1775-4c4e-a679-f8e15eaad3f7
+@model function likelihood_for_λ(data)
+    # Prior distributions.
+    σ ~ σ_prior
+	λ ~ λ_prior
+
+	# use first and last data pts as prior.
+	θ₀ ~ Normal(data[1, "θ [°C]"], σ)
+	θᵃⁱʳ ~ Normal(data[end, "θ [°C]"], σ)
+	
+	t₀ = 0.0
+
+    # Observations.
+    for i in 2:nrow(data)-2
+		tᵢ = data[i, "t [hr]"]
+		μ = θ_model(tᵢ, λ, t₀, θ₀, θᵃⁱʳ)
+        data[i, "θ [°C]"] ~ Normal(μ, σ)
+    end
+
+    return nothing
+end
+
+# ╔═╡ 2e57666d-b3f4-451e-86fd-781217c1258d
+model_λ = likelihood_for_λ(data)
+
+# ╔═╡ bb3ae6a9-5d87-4b90-978e-8674f6c5bd99
+chain_λ = sample(model_λ, NUTS(), MCMCSerial(), 2_500, 4; progress=true)
+
+# ╔═╡ f35c7dcd-243a-4a16-8f7d-424c583aa99f
+nrow(DataFrame(chain_λ))
+
+# ╔═╡ 5478b192-677e-4296-8ce5-c6d0447898bc
+bw = Dict("τ" => 0.01, "T₀" => 0.05)
+
+# ╔═╡ cc52d1e1-c870-4340-b994-090b39d8b9df
+hist(DataFrame(chain_λ)[:, "λ"])
+
+# ╔═╡ a8257d2e-fca8-4bd9-8733-f4034836bbb9
+analyze_posterior(chain_λ, "σ")
+
+# ╔═╡ 31c747b3-0ff1-4fae-9707-47f258d4018f
+analyze_posterior(chain_λ, "λ")
 
 # ╔═╡ 788f5c20-7ebb-43e7-bd07-46aa6c9fd249
 function get_kde_ρ(x::Vector{Float64})
-	bw = smart_bw(x)
+	bw = 1.06 * std(x) * (length(x)) ^ (-1/5)
+	
 	kde = KernelDensity(bandwidth=bw)
 	kde.fit(reshape(x, length(x), 1))
 
@@ -175,32 +226,32 @@ end
 function viz_convergence(chain::Chains, var::String)
 	var_range = range(0.9 * minimum(chain[var]), 1.1 * maximum(chain[var]), length=120)
 	
-	labels = Dict("τ" => L"$\lambda$ [hr]", "T₀" => L"$\theta_0$ [°C]")
+	labels = Dict("λ" => "λ [hr]", "θ₀" => "θ₀[°C]")
 	
-	f, ax = subplots(2, 1, figsize=(10, 6))
+	fig = Figure(resolution=(the_resolution[1], the_resolution[2]*2))
+	axs = [Axis(fig[i, 1]) for i = 1:2]
 	for (r, c) in enumerate(groupby(DataFrame(chain), "chain"))
-		ax[1].plot(c[:, "iteration"], c[:, var], linewidth=1)
+		lines!(axs[1], c[:, "iteration"], c[:, var], linewidth=1)
 		
 		ρ = get_kde_ρ(c[:, var])
-		ax[2].plot(var_range, ρ.(var_range), label="chain $r", linewidth=1)
-		ax[2].set_xlim(var_range[1], var_range[end])
-
+		lines!(axs[2], var_range, ρ.(var_range), label="chain $r", linewidth=1)
+		xlims!(axs[2], var_range[1], var_range[end])
 	end
-	ax[1].set_xlabel("iteration")
-	ax[1].set_xlim(minimum(DataFrame(chain)[:, "iteration"])-1, maximum(DataFrame(chain)[:, "iteration"])+1)
-	ax[2].set_ylabel("density")
-	ax[2].set_ylim(ymin=0)
-	ax[2].set_yticks([0])
-	ax[1].set_ylabel(labels[var])
-	ax[2].set_xlabel(labels[var])
-	ax[2].legend()
-	tight_layout()
-	savefig("figs/convergence_study.pdf", format="pdf")
-	f
+	axs[1].xlabel = "iteration"
+	xlims!(axs[1], 
+		minimum(DataFrame(chain)[:, "iteration"])-1, 
+		maximum(DataFrame(chain)[:, "iteration"])+1
+	)
+	axs[2].ylabel = "density"
+	axs[1].ylabel = labels[var]
+	axs[2].xlabel = labels[var]
+	axislegend(axs[2])
+	save("convergence_study_$var.pdf", fig)
+	fig
 end
 
 # ╔═╡ 44963969-6883-4c7f-a6ed-4c6eac003dfe
-viz_convergence(chain_τ, "τ")
+viz_convergence(chain_λ, "λ")
 
 # ╔═╡ 2378f74e-ccd6-41fd-89f5-6001b75ea741
 alpha = 0.4
@@ -213,76 +264,47 @@ function viz_posterior_prior(chain::Chains, prior::Distribution,
 
 	# variable-specific stuff
 	xlabels = Dict(
-		"τ" => L"time constant, $\lambda$ [hr]",
-		"T₀" => L"initial temperature, $\theta_0$ [°C]"
+		"λ" => "time constant, λ [hr]",
+		"T₀" => "initial temperature, θ_0 [°C]"
 	)
 	short_xlabels = Dict(
-		"τ" => L"$\lambda$ [hr]",
+		"λ" => "λ [hr]",
 		"T₀" => L"$\theta_0$ [°C]"
 	)
-	posterior_lims = Dict("τ" => [0.95, 1.2], "T₀" => [0.0, 15.0])
+	lims = Dict("λ" => [0.0, 2.0], "T₀" => [0.0, 15.0])
 	
-	fig, ax = myfig()
-	xlabel(xlabels[var])
-	ylabel("posterior density")
+	fig = Figure()
+	ax = Axis(fig[1, 1], xlabel=xlabels[var], ylabel="density")
 
-	###
-	# posterior
-	var_range = range(posterior_lims[var]..., length=150)
-	ρ = get_kde_ρ(x.samples)
-	plot(var_range, ρ.(var_range), color="black", label="posterior")
-	fill_between(var_range, zeros(length(var_range)), ρ.(var_range),
-				 color=the_colors["posterior"], alpha=alpha)
+	var_range = range(lims[var]..., length=500)
+
+	### posterior
+	ρ_posterior_f = get_kde_ρ(x.samples)
+	ρ_posterior = ρ_posterior_f.(var_range)
+
+	### prior
+	ρ_prior = [pdf(prior, x) for x in var_range]
+
+	# bands
+	band!(var_range, zeros(length(var_range)), ρ_prior,
+		  color=(the_colors["prior"], 0.2))
+	band!(var_range, zeros(length(var_range)), ρ_posterior,
+		  color=(the_colors["posterior"], 0.2))
 	
-	plot([x.lb, x.ub], [0, 0], c="gray", linewidth=5, clip_on=false)
+	# lines
+	lines!(var_range, ρ_prior, color=the_colors["prior"], label="prior")
+	lines!(var_range, ρ_posterior, color=the_colors["posterior"], label="posterior")
 
-	if var == "T₀"
-		axvline([0], color="gray", linewidth=1)
-		xlim([-1, 16])
-	else
-		xlim(posterior_lims[var]...)
-	end
-	ylim(ymin=0)
-	yticks([0])
+	ylims!(0, nothing)
+	xlims!(lims[var]...)
 
-	if ! isnothing(true_var)
-		axvline([true_var], linestyle="dashed", color=the_colors["data"])
-	end
+	axislegend()
 
-	###
-	# prior
-	inset = ax.inset_axes([0.75, 0.7, 0.3, 0.3])
-	inset.set_xlabel(short_xlabels[var])
-	inset.set_ylabel("prior\ndensity")
-	inset.set_ylim(ymin=0)
-	
-	var_range = [prior.a, prior.b]
-	var_range = vcat(var_range .+ 0.0001, var_range .- 0.0001)
-	sort!(var_range)
-	ρ = [pdf(prior, x) for x in var_range]
-	inset.plot(var_range, ρ, color="black", label="prior")
-	inset.fill_between(var_range, zeros(length(var_range)), ρ,
-				 color=the_colors["prior"], alpha=alpha)
-	inset.axvline([0], color="gray", linewidth=1)
-	inset.set_yticks([0])
-	if var == "τ"
-		inset.set_xlim(-0.5, 5.5)
-	end
-	if var == "T₀"
-		inset.set_xticks([0, 10, 20])
-		inset.set_xlim(-1, 21)
-	end
-	inset.set_ylim(0, maximum(ρ)*2)
-
-	# # posterior
-	println("ci = ", round.([x.lb, x.ub], digits=2))
-	tight_layout()
-	savefig("figs/" * savename, format="pdf")
 	fig
 end
 
 # ╔═╡ 294e240f-c146-4ef3-b172-26e70ad3ed19
-viz_posterior_prior(chain_τ, τ_prior_1, "τ", "param_id_prior_posterior.pdf")
+viz_posterior_prior(chain_λ, λ_prior, "λ", "param_id_prior_posterior.pdf")
 
 # ╔═╡ cd46a3c7-ae78-4f3c-8ba6-c4a55d598843
 function viz_b4_after_inference(
@@ -711,6 +733,8 @@ contour(A)
 # ╟─b1c06c4d-9b4d-4af3-9e9b-3ba993ca83a0
 # ╠═43bcf4b0-fbfc-11ec-0e23-bb05c02078c9
 # ╠═1dea25e4-51ee-4f32-a97e-8ce316dfb371
+# ╠═509e3000-a94d-431c-9a4e-2ba1c6f148a3
+# ╠═cc8f82f7-a8db-4f45-8ccc-fa5b171eb3e7
 # ╠═edb44636-d6d4-400f-adc4-75b287a1f993
 # ╠═7831a816-e8d4-49c5-b209-078e74e83c5f
 # ╠═a081eb2c-ff46-4efa-a6cd-ee3e9209e14e
@@ -719,10 +743,16 @@ contour(A)
 # ╠═a13ba151-99c1-47ae-b96e-dc90464990b6
 # ╠═ee7fd372-22b0-4bf5-a5e9-5e3a5b6e1843
 # ╠═8ee1b06d-c255-4ae3-ac8b-06f7498dbf76
+# ╟─38304191-f930-41a6-8545-4734a5ad4ecf
+# ╠═ff7e4fd8-e34b-478e-ab8a-2f35aba99ba6
+# ╠═9e78c280-c19b-469b-8a2b-3c9f4b92a2e5
 # ╟─b29797b9-7e2f-4d55-bc39-dba5ad7663de
 # ╠═269ac9fa-13f3-443a-8669-e8f13d3518a6
 # ╠═d32079ef-7ebd-4645-9789-1d258b13b66f
-# ╠═b8a3fc88-6e4d-457d-8582-f6302fb206ac
+# ╠═b2b83a4e-54b0-4743-80c2-d81ac2d394e2
+# ╠═2da4df4f-7bd1-4a40-97f3-4861c486e2d6
+# ╠═a4192388-5fca-4d61-9cc0-27029032b765
+# ╟─f6f7051d-95c0-4a15-86eb-74fb56d46691
 # ╠═ce178132-a07d-4154-83b4-5f536c8f77aa
 # ╠═7b8f64b9-9776-4385-a2f0-38f78d76ef79
 # ╠═ecd4ea3f-1775-4c4e-a679-f8e15eaad3f7
@@ -730,11 +760,10 @@ contour(A)
 # ╠═bb3ae6a9-5d87-4b90-978e-8674f6c5bd99
 # ╠═f35c7dcd-243a-4a16-8f7d-424c583aa99f
 # ╠═5478b192-677e-4296-8ce5-c6d0447898bc
-# ╠═9e78c280-c19b-469b-8a2b-3c9f4b92a2e5
+# ╠═cc52d1e1-c870-4340-b994-090b39d8b9df
 # ╠═44963969-6883-4c7f-a6ed-4c6eac003dfe
-# ╠═ff7e4fd8-e34b-478e-ab8a-2f35aba99ba6
 # ╠═a8257d2e-fca8-4bd9-8733-f4034836bbb9
-# ╠═ff9735a0-1fea-4518-a06a-0af74687ba9c
+# ╠═31c747b3-0ff1-4fae-9707-47f258d4018f
 # ╠═788f5c20-7ebb-43e7-bd07-46aa6c9fd249
 # ╠═2378f74e-ccd6-41fd-89f5-6001b75ea741
 # ╠═a1e622ae-7672-4ca2-bac2-7dcc0a500f1f
