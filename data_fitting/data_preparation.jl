@@ -141,7 +141,7 @@ viz_data(downsampled_data, Tₐ, shld_i_save=true)
 md"## export data for other tasks"
 
 # ╔═╡ 322c60c0-1e04-4bd8-a3f9-2802e8deb605
-jldsave("data_run_$run.jld2"; data=downsampled_data, T₀=T₀, Tₐ=Tₐ)
+jldsave("data_run_$run.jld2"; data=downsampled_data, θ₀=T₀, θᵃⁱʳ=Tₐ)
 
 # ╔═╡ Cell order:
 # ╠═38925e1a-817b-4575-9768-02fb68bec2d6
