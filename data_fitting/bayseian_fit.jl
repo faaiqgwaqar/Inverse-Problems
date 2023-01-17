@@ -54,7 +54,7 @@ md"## the model"
 
 # ╔═╡ a13ba151-99c1-47ae-b96e-dc90464990b6
 function θ_model(t, λ, t₀, θ₀, θᵃⁱʳ)
-    if t < 0.0
+    if t < t₀
         return θ₀
 	end
     return θᵃⁱʳ .+ (θ₀ - θᵃⁱʳ) * exp(-(t - t₀) / λ)
@@ -118,13 +118,13 @@ function analyze_posterior(chain::Chains, param::Union{String, Symbol})
 end
 
 # ╔═╡ 788f5c20-7ebb-43e7-bd07-46aa6c9fd249
-function get_kde_ρ(x::Vector{Float64}) # returns a function
+function get_kde_ρ(x::Vector{Float64}; support::Tuple{Float64, Float64}=(-Inf, Inf)) # returns a function
 	bw = 1.06 * std(x) * (length(x)) ^ (-1/5)
 	
 	kde = KernelDensity(bandwidth=bw)
 	kde.fit(reshape(x, length(x), 1))
 
-	return y -> y < 0.0 ? 0.0 : exp(kde.score_samples(reshape([y], 1, 1))[1])
+	return y -> ((y < support[1]) || (y > support[2])) ? 0.0 : exp(kde.score_samples(reshape([y], 1, 1))[1])
 end
 
 # ╔═╡ 9e78c280-c19b-469b-8a2b-3c9f4b92a2e5
@@ -171,10 +171,12 @@ data = load("data_run_$run.jld2")["data"]
 θᵃⁱʳ = load("data_run_$run.jld2")["θᵃⁱʳ"]
 
 # ╔═╡ 2da4df4f-7bd1-4a40-97f3-4861c486e2d6
-function _viz_data!(ax, data::DataFrame, θᵃⁱʳ::Float64; incl_label=true)
+function _viz_data!(ax, data::DataFrame, θᵃⁱʳ::Float64; incl_label=true, incl_t₀=true)
 	max_t = maximum(data[:, "t [hr]"])
-	
-	vlines!(ax, [0.0], color="gray", linewidth=1)
+
+	if incl_t₀
+		vlines!(ax, [0.0], color="gray", linewidth=1, label=incl_label ? "t₀" : nothing)
+	end
 	# air temp
 	hlines!(ax, θᵃⁱʳ, style=:dash, linestyle=:dot, 
 		label=incl_label ? rich("θ", superscript("air")) : nothing, color=the_colors["air"])
@@ -252,7 +254,7 @@ function viz_posterior_prior(chain::Chains, prior::Distribution,
 	var_range = range(lims[var]..., length=5000)
 
 	### posterior
-	ρ_posterior_f = get_kde_ρ(x.samples)
+	ρ_posterior_f = get_kde_ρ(x.samples, support=(0.0, Inf))
 	ρ_posterior = ρ_posterior_f.(var_range)
 
 	### prior
@@ -275,7 +277,7 @@ function viz_posterior_prior(chain::Chains, prior::Distribution,
 	# truth
 	if ! isnothing(true_var)
 		vlines!(true_var, color="black", linestyle=:dash, 
-			linewidth=1, label=rich("true θ", subscript("0,obs")))
+			linewidth=1, label=rich("held-out θ", subscript("0,obs")))
 	end
 
 	ylims!(0, nothing)
@@ -292,9 +294,17 @@ viz_posterior_prior(chain_λ, λ_prior, "λ", "param_id_prior_posterior.pdf")
 # ╔═╡ bba69cd4-f56f-4e93-af03-f0b3f56e710e
 function _viz_trajectories!(ax, data::DataFrame, θₐᵢᵣ::Float64, chain::Chains)
 	# model
-	ts = range(0.0, maximum(data[:, "t [hr]"]), length=100)
-	for (i, row) in enumerate(eachrow(DataFrame(sample(chain, 250, replace=false))))
-		lines!(ts, θ_model.(ts, row["λ"], 0.0, row["θ₀"], θₐᵢᵣ),
+	t_lo = -0.5
+	if :t₀ in names(chain)
+		t_lo = minimum(chain["t₀"]) - 0.5
+	end
+	ts = range(t_lo, maximum(data[:, "t [hr]"]), length=100)
+	for (i, row) in enumerate(eachrow(DataFrame(sample(chain, 100, replace=false))))
+		t₀ = 0.0
+		if :t₀ in names(chain)
+			t₀ = row["t₀"]
+		end
+		lines!(ts, θ_model.(ts, row["λ"], t₀, row["θ₀"], θₐᵢᵣ),
 			   color=(the_colors["model"], 0.1), label=i == 1 ? "model" : nothing)
 	end
 end
@@ -315,7 +325,13 @@ end
 cor(DataFrame(chain_λ)[:, "σ"], DataFrame(chain_λ)[:, "λ"])
 
 # ╔═╡ d8e026b9-8943-437e-a08b-2395de35d705
-md"## time reversal problem"
+md"## time reversal problem
+
+### determined
+"
+
+# ╔═╡ 30bd4bca-4af6-4e1a-8131-75ca18df7a59
+label_for_heldout = rich("held-out (t", subscript("0"), ", θ", subscript("0,obs"), ")")
 
 # ╔═╡ 7df25291-a600-449e-a194-3ec7c3f11361
 other_run = 11
@@ -367,10 +383,12 @@ end
 i_obs = 17 # and try 10, 17
 
 # ╔═╡ 9af1cae7-59b0-4521-a8f9-a000494b8471
-function _viz_data!(ax, data::DataFrame, i_obs::Int; incl_test=false, incl_legend=true)
+function _viz_data!(ax, data::DataFrame, i_obs::Int; incl_test=false, incl_legend=true, incl_t₀=true)
 	max_t = maximum(data[:, "t [hr]"])
-	
-	vlines!(ax, [0.0], color="gray", linewidth=1)
+
+	if incl_t₀
+		vlines!(ax, [0.0], color="gray", linewidth=1, label=incl_legend ? "t₀" : nothing)
+	end
 	# air temp
 	hlines!(ax, θᵃⁱʳ_tr, style=:dash, linestyle=:dot, 
 		label=incl_legend ? rich("θ", superscript("air")) : nothing, color=the_colors["air"])
@@ -379,9 +397,9 @@ function _viz_data!(ax, data::DataFrame, i_obs::Int; incl_test=false, incl_legen
 		label=incl_legend ? rich("(t', θ'", subscript("obs"), ")") : nothing, strokewidth=1, color=the_colors["data"])
 	if incl_test
 		scatter!(data[1, "t [hr]"], data[1, "θ [°C]"], 
-			label=rich("test data (t₀, θ₀", subscript(",obs"), ")"), strokewidth=1, color="white")
+			label=label_for_heldout, strokewidth=1, color="white")
 	end
-	xlims!(-0.03*max_t, 1.03*max_t)
+	xlims!(-0.5, 1.03*max_t)
 	ylims!(0, 20)
 end
 
@@ -413,7 +431,7 @@ function viz_trajectories(
 		       ylabel="lime temperature [°C]",
 	)
 	_viz_trajectories!(ax, data, θᵃⁱʳ, chain)
-	_viz_data!(ax, data, θᵃⁱʳ, incl_label=false)
+	_viz_data!(ax, data, θᵃⁱʳ, incl_label=false, incl_t₀=false)
 	
 
 	axislegend(position=:rb)
@@ -425,13 +443,13 @@ function viz_trajectories(
 end
 
 # ╔═╡ b00bc0b4-c33e-4f5e-98f9-68085bd3d94d
-function viz_data(data::DataFrame, i_obs::Int; savename=nothing)
+function viz_data(data::DataFrame, i_obs::Int; savename=nothing, incl_t₀=true)
 	fig = Figure()
 	ax  = Axis(fig[1, 1], 
 		       xlabel="time, t [hr]",
 		       ylabel="lime temperature [°C]",
 	)
-	_viz_data!(ax, data, i_obs)
+	_viz_data!(ax, data, i_obs, incl_t₀=incl_t₀)
 	axislegend(position=:rb)
 	if ! isnothing(savename)
 		save(savename, fig)
@@ -440,7 +458,7 @@ function viz_data(data::DataFrame, i_obs::Int; savename=nothing)
 end
 
 # ╔═╡ a4192388-5fca-4d61-9cc0-27029032b765
-viz_data(data, θᵃⁱʳ)
+viz_data(data, θᵃⁱʳ, savename="figs/param_id_data.pdf")
 
 # ╔═╡ 8e7ae1d5-fade-4b90-8dd7-e61e965f3609
 viz_data(data_tr, i_obs)
@@ -466,7 +484,8 @@ function viz_trajectories(
 				   data::DataFrame, 
 	               chain::Chains,
 				   i_obs::Int;
-				   savename=nothing
+				   savename=nothing,
+				   incl_t₀=true
 )
 	fig = Figure()
 	ax  = Axis(fig[1, 1], 
@@ -478,9 +497,14 @@ function viz_trajectories(
 	_viz_trajectories!(ax, data, θᵃⁱʳ_tr, chain)
 	
 	# data
-	_viz_data!(ax, data, i_obs, incl_test=true, incl_legend=false)
+	_viz_data!(ax, data, i_obs, incl_test=true, incl_legend=false, incl_t₀=incl_t₀)
 	
 	axislegend(position=:rb)
+
+	if :t₀ in names(chain)
+		xlims!(minimum(DataFrame(chain)[:, "t₀"]), nothing)
+	end
+	
 	if ! isnothing(savename)
 		save(savename, fig)
 	end
@@ -495,7 +519,13 @@ viz_trajectories(data, θᵃⁱʳ, chain_λ)
 viz_trajectories(data_tr, chain_θ₀, i_obs)
 
 # ╔═╡ 1e5ba0b1-c129-410c-9048-89a75210fd40
-md"## the ill-posed inverse problem"
+md"### underdetermined"
+
+# ╔═╡ 364f2880-6a27-49a0-b5d4-1c6fd6f43293
+viz_data(data_tr, i_obs, incl_t₀=false)
+
+# ╔═╡ 4d931a20-2ab7-43c7-91ed-8f4fd40648a5
+t₀_prior = truncated(Normal(0.0, 0.25), -1.0, 1.0)
 
 # ╔═╡ 8b1f8a44-612c-4032-93a7-7b0c21c47c31
 @model function likelihood_for_θ₀_t₀(data, i_obs)
@@ -506,7 +536,7 @@ md"## the ill-posed inverse problem"
 	end
 	σ ~ σ_prior_tr
 	λ ~ λ_prior_tr
-	t₀ ~ truncated(Normal(0.0, 0.25), -1.0, 1.0)
+	t₀ ~ t₀_prior
 
     # Observation
 	tᵢ = data[i_obs, "t [hr]"]
@@ -522,16 +552,122 @@ model_θ₀_t₀ = likelihood_for_θ₀_t₀(data_tr, i_obs)
 # ╔═╡ 14bee7d1-dadc-41be-9ea0-1420cd68a121
 chain_θ₀_t₀ = sample(model_θ₀_t₀, NUTS(), MCMCSerial(), 2_500, 4; progress=true)
 
+# ╔═╡ 8b176631-b5a7-4c2b-afc7-9dacd0d22d0c
+viz_trajectories(data_tr, chain_θ₀_t₀, i_obs, incl_t₀=false)
+
 # ╔═╡ 7824672b-e69d-435d-a8ab-d62f014374d3
-function get_ρ_posterior_t₀_T₀()
-	X = Matrix(DataFrame(chain_T₀_t₀)[:, [:T₀, :t₀]])
+function get_ρ_posterior_t₀_θ₀(chain_θ₀_t₀::Chains)
+	X = Matrix(DataFrame(chain_θ₀_t₀)[:, [:θ₀, :t₀]])
+
+	# standardize for an isotropic kernel
 	μ = mean(X, dims=1)
 	σ = std(X, dims=1)
 	X̂ = (X .- μ) ./ σ
+
+	# fit KDE
 	kde = KernelDensity(bandwidth=0.1)
 	kde.fit(X̂)
-	return x -> exp(kde.score_samples((reshape(x, 1, 2) .- μ) ./ σ)[1])
+
+	# return function that gives density
+	ρ = x -> x[1] < 0 ? 0 : exp(kde.score_samples((reshape(x, 1, 2) .- μ) ./ σ)[1])
+	return ρ
 end
+
+# ╔═╡ f8092ba3-54c7-4e2d-a885-f5ef6c6e094e
+function viz_θ₀_t₀_distn(θ₀_prior::Distribution, 
+	                     t₀_prior::Distribution, 
+	                     chain_θ₀_t₀::Chains)
+	the_colormaps = Dict(
+		"posterior" => range(RGB(1.0, 1.0, 1.0), 
+			RGB(the_colors["posterior"].r,the_colors["posterior"].g,the_colors["posterior"].b)
+		),
+		"prior" => range(RGB(1.0, 1.0, 1.0), 
+			RGB(the_colors["prior"].r,the_colors["prior"].g,the_colors["prior"].b)
+		),
+	)
+	
+	fig = Figure(resolution=(600, 600))
+	gl = fig[1, 1] = GridLayout()
+	ax  = Axis(fig[2, 2], xlabel="t₀ [min]", ylabel="θ₀ [°C]", aspect=1)
+	ax_t = Axis(fig[1, 2], ylabel="marginal\ndensity", yticks=[0])
+	ax_r = Axis(fig[2, 3], xlabel="marginal\ndensity", xticks=[0])
+	linkyaxes!(ax_r, ax)
+	linkxaxes!(ax_t, ax)
+	hidexdecorations!(ax_t)
+	hideydecorations!(ax_r)
+
+	t̂₀ = analyze_posterior(chain_θ₀_t₀, :t₀)
+	θ̂₀ = analyze_posterior(chain_θ₀_t₀, :θ₀)
+	
+	t₀s = range(-0.6, 0.6, length=100)
+	θ₀s = range(-0.5, 20.5, length=101)
+
+	# joint!
+	ρ_posterior = get_ρ_posterior_t₀_θ₀(chain_θ₀_t₀)
+
+	ρs = Dict("prior" => zeros(length(θ₀s), length(t₀s)),
+			  "posterior" => zeros(length(θ₀s), length(t₀s)))
+	ρs["prior"] = [pdf(θ₀_prior, θ₀) * pdf(t₀_prior, t₀)
+						for t₀ in t₀s, θ₀ in θ₀s]
+	ρs["posterior"] = [ρ_posterior([θ₀, t₀])
+						for t₀ in t₀s, θ₀ in θ₀s]
+	for p in ["prior", "posterior"]
+		contour!(ax, t₀s, θ₀s, ρs[p], linewidth=1, 
+		         colormap=the_colormaps[p], label=p, levels=8)
+	end
+		# colormap=the_colormaps[posterior_or_prior], extendhigh=the_colors["distn2"])
+
+	# marginals!
+    ρ_posterior_θ₀ = get_kde_ρ(θ̂₀.samples)
+	ρ_posterior_t₀ = get_kde_ρ(t̂₀.samples)
+	lines!(ax_t, t₀s, ρ_posterior_t₀.(t₀s), 
+		color=the_colors["posterior"], linewidth=2)
+	lines!(ax_r, ρ_posterior_θ₀.(θ₀s), θ₀s,
+		color=the_colors["posterior"], linewidth=2)
+	# elseif posterior_or_prior == "prior"
+		
+	# 	# t₀
+	# 	t₀s = [t₀_prior.a - ϵ, t₀_prior.a + ϵ, t₀_prior.b - ϵ, t₀_prior.b + ϵ]
+	# 	ρ_t₀_prior = [pdf(t₀_prior, t₀) for t₀ in t₀s]
+	lines!(ax_t, t₀s, [pdf(t₀_prior, t₀) for t₀ in t₀s], 
+		color=the_colors["prior"], linewidth=2)
+	lines!(ax_r, [pdf(θ₀_prior, θ₀) for θ₀ in θ₀s], θ₀s, 
+		color=the_colors["prior"], linewidth=2)
+	# 	band!(ax_t, t₀s, zeros(length(t₀s)), ρ_t₀_prior, 
+	# 			color=(the_colors["distn2"], 0.4))
+	# 	# T₀
+	# 	T₀s = [T₀_prior.a - ϵ, T₀_prior.a + ϵ, T₀_prior.b - ϵ, T₀_prior.b + ϵ]
+	# 	ρ_T₀_prior = [pdf(T₀_prior, T₀) for T₀ in T₀s]
+	# 	lines!(ax_r, ρ_T₀_prior, T₀s, color=:black, linewidth=1)
+	# 	band_direction_y!(ax_r, T₀s, 
+	# 		   zeros(length(T₀s)), ρ_T₀_prior, (the_colors["distn2"], 0.4))
+	# end
+	# # truth
+	scatter!(ax, data_tr[1, "t [hr]"], data_tr[1, "θ [°C]"], 
+	         label=label_for_heldout, strokewidth=2, color=(:white, 0.0))
+	
+	
+	# # ylims!(ax, 0, nothing)
+	# # xlims!(ax, 0, 150.0)
+	# # ylims!(ax_t, 0, nothing)
+	# xlims!(ax_r, 0, nothing)
+	# ylims!(ax_t, 0, nothing)
+
+	colgap!(gl, 5)
+	rowgap!(gl, 5)
+	# xlims!(ax, minimum(t₀s), maximum(t₀s))
+	# ylims!(ax, minimum(T₀s), maximum(T₀s))
+	rowsize!(fig.layout, 1, Relative(.225))
+	colsize!(fig.layout, 3, Relative(.225))
+	# Colorbar(fig[2, 1], colormap=ColorSchemes.Wistia, ticks=[0], 
+	# 	label="posterior density", flipaxis=false)
+	# save("posterior_theta_0_t_0_i_obs_$(i_obs).pdf", fig)
+	fig
+	# ρs
+end
+
+# ╔═╡ 0b0af726-3eb7-4939-bdd5-7b76213d5485
+viz_θ₀_t₀_distn(θ₀_prior, t₀_prior, chain_θ₀_t₀)
 
 # ╔═╡ b14d545e-bc9e-493b-877f-899ec4ddc8fc
 begin
@@ -590,6 +726,7 @@ md"to check..."
 # ╠═f20159ad-7f8b-484e-95ea-afdac97f876a
 # ╠═f184e3ea-82f9-49f4-afb6-99c609d7936f
 # ╟─d8e026b9-8943-437e-a08b-2395de35d705
+# ╠═30bd4bca-4af6-4e1a-8131-75ca18df7a59
 # ╠═7df25291-a600-449e-a194-3ec7c3f11361
 # ╠═8f145533-7208-4c25-9b1e-84370c7ac7ca
 # ╠═4cc1ebb3-9c22-4a05-9a09-82b81073aa79
@@ -611,9 +748,14 @@ md"to check..."
 # ╠═9a4f8bc7-bbc7-42d2-acf2-992d740f9d8b
 # ╠═5cd464bb-710a-4e57-a51a-2ebad433e874
 # ╟─1e5ba0b1-c129-410c-9048-89a75210fd40
+# ╠═364f2880-6a27-49a0-b5d4-1c6fd6f43293
+# ╠═4d931a20-2ab7-43c7-91ed-8f4fd40648a5
 # ╠═8b1f8a44-612c-4032-93a7-7b0c21c47c31
 # ╠═845bdbf7-f30e-4f0c-a8db-6f272e76eec9
 # ╠═14bee7d1-dadc-41be-9ea0-1420cd68a121
+# ╠═8b176631-b5a7-4c2b-afc7-9dacd0d22d0c
 # ╠═7824672b-e69d-435d-a8ab-d62f014374d3
+# ╠═f8092ba3-54c7-4e2d-a885-f5ef6c6e094e
+# ╠═0b0af726-3eb7-4939-bdd5-7b76213d5485
 # ╠═b14d545e-bc9e-493b-877f-899ec4ddc8fc
 # ╟─8ba02a50-98f8-4c83-9f4f-040a1aad8274
