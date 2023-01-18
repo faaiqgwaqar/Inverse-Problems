@@ -333,7 +333,7 @@ md"## time reversal problem
 "
 
 # ╔═╡ 30bd4bca-4af6-4e1a-8131-75ca18df7a59
-label_for_heldout = rich("held-out (t", subscript("0"), ", θ", subscript("0,obs"), ")")
+label_for_heldout = rich("(t", subscript("0"), ", θ", subscript("0,obs"), ")")
 
 # ╔═╡ 7f5c6af9-8510-4eff-8cf0-f769e0d2a005
 tr_xlims = [-0.75, 10.1]
@@ -481,7 +481,7 @@ nrow(DataFrame(chain_θ₀))
 viz_convergence(chain_θ₀, "θ₀")
 
 # ╔═╡ db79cc93-0459-42b2-a800-6a1bc7eec1db
-viz_posterior_prior(chain_θ₀, θ₀_prior, "θ₀", savename="tr_posterior_prior", 
+viz_posterior_prior(chain_θ₀, θ₀_prior, "θ₀", savename="tr_prior_posterior", 
 	true_var=data_tr[1, "θ [°C]"])
 
 # ╔═╡ 9a4f8bc7-bbc7-42d2-acf2-992d740f9d8b
@@ -522,7 +522,7 @@ function viz_trajectories(
 end
 
 # ╔═╡ b6b05d1b-5e2f-4082-a7ef-1211024c700b
-viz_trajectories(data, θᵃⁱʳ, chain_λ; savename="param_id_trajectory")
+viz_trajectories(data, θᵃⁱʳ, chain_λ; savename="param_id_trajectories")
 
 # ╔═╡ 5cd464bb-710a-4e57-a51a-2ebad433e874
 viz_trajectories(data_tr, chain_θ₀, i_obs, savename="tr_trajectories")
@@ -643,15 +643,17 @@ function viz_θ₀_t₀_distn(θ₀_prior::Distribution,
 		color=the_colors["prior"], linewidth=2)
 
 	# # truth
-	scatter!(ax, data_tr[1, "t [hr]"], data_tr[1, "θ [°C]"], 
+	s = scatter!(ax, data_tr[1, "t [hr]"], data_tr[1, "θ [°C]"], 
 	         label=label_for_heldout, strokewidth=2, color=(:white, 0.0))
+	vlines!(ax_t, data_tr[1, "t [hr]"], color="black", linestyle=:dash, linewidth=1)
+	hlines!(ax_r, data_tr[1, "θ [°C]"], color="black", linestyle=:dash, linewidth=1)
 
 	rowsize!(fig.layout, 1, Relative(0.25))
 	colsize!(fig.layout, 2, Relative(0.25))
 	resize_to_layout!(fig)
-	Legend(fig[1, 2], [lprio, lpost], ["prior", "posterior"])
+	Legend(fig[1, 2], [lprio, lpost, s], ["prior", "posterior", rich("(t", subscript("0"), ", θ", subscript("0, obs"), ")")], labelsize=16)
 
-	save(joinpath("figs", "posterior_tr2_$(i_obs).pdf"), fig)
+	save(joinpath("figs", "tr2_prior_posterior.pdf"), fig)
 	fig
 	# ρs
 end
