@@ -7,7 +7,7 @@ using InteractiveUtils
 # ╔═╡ 43bcf4b0-fbfc-11ec-0e23-bb05c02078c9
 begin
 	import Pkg; Pkg.activate()
-	using DataFrames, Distributions, Turing, LinearAlgebra, Random, JLD2, ColorSchemes, StatsBase, Colors, PlutoUI, CairoMakie, FileIO
+	using DataFrames, Distributions, Turing, LinearAlgebra, Random, JLD2, ColorSchemes, StatsBase, Colors, PlutoUI, CairoMakie, FileIO, Printf
 end
 
 # ╔═╡ b1c06c4d-9b4d-4af3-9e9b-3ba993ca83a0
@@ -527,6 +527,68 @@ viz_trajectories(data, θᵃⁱʳ, chain_λ; savename="param_id_trajectories")
 # ╔═╡ 5cd464bb-710a-4e57-a51a-2ebad433e874
 viz_trajectories(data_tr, chain_θ₀, i_obs, savename="tr_trajectories")
 
+# ╔═╡ eb3eafea-a182-4972-a008-3a7649c4ef99
+function ridge_plot()
+	i_obss = [2 * i for i = 1:8]
+	make_ridge_like = true
+	cmap = ColorSchemes.Wistia
+	crange = (0.0, 2.0)
+	
+	fig = Figure(resolution=(the_resolution[1], the_resolution[2]*1.5))
+	axs = [Axis(fig[i, 1], yticks=[0]) for i = 1:length(i_obss)]
+	linkxaxes!(axs...)
+	linkyaxes!(axs...)
+	
+	axs[end].xlabel="initial lime temperature, θ₀ [°C]"
+	# solve a series of time reversal problems
+	scaling_factor = 0.1
+	
+	θ₀s = range(0.0, 20.0, length=100)
+	for (i, i_obs) in enumerate(i_obss)
+		t′ = data[i_obs, "t [hr]"]
+		color = get(cmap, t′, crange)
+		if i != length(i_obss)
+			hidexdecorations!(axs[i])
+		end
+			
+		chain_θ₀ = posterior_time_reversal(i_obs)
+		
+		θ₀ = analyze_posterior(chain_θ₀, "θ₀")
+		ρ_posterior_f = get_kde_ρ(θ₀.samples, support=(θ₀_prior.a, θ₀_prior.b))
+		ρ = ρ_posterior_f.(θ₀s)
+		
+		lines!(axs[i], θ₀s, ρ, 
+			color="black", linewidth=1)
+		band!(axs[i], θ₀s, zeros(length(θ₀s)), ρ,
+			color=(color, 0.2))
+		if i == 1
+			vlines!(axs[i], data_tr[1, "θ [°C]"], color="black", linestyle=:dash, linewidth=1)
+		end
+		Label(fig[i, 1], @sprintf("t′ = %.2f hr", t′), 
+			tellwidth=false, tellheight=false, halign=0.9, valign=0.0,
+			font=AoG.firasans("Light"), fontsize=14
+		)
+		if make_ridge_like
+			hideydecorations!(axs[i])
+			hidespines!(axs[i], :l)
+		end
+	end
+	ylims!(axs[end], 0.0, nothing)
+	xlims!(axs[end], 0.0, 20.0)
+	if make_ridge_like
+		rowgap!(fig.layout, Relative(-0.15))
+	else
+		rowgap!(fig.layout, Relative(0.1))
+	end
+	Label(fig[:, 0], "posterior density", rotation=pi/2, font=AoG.firasans("Light"))
+	Colorbar(fig[:, 2], colormap=cmap, limits=crange, label="measurement time, t′ [hr]")
+	save("ridge_plot.pdf", fig)
+	fig
+end
+
+# ╔═╡ 2d8add24-9228-4073-b3bb-1f22b1e07b86
+ridge_plot()
+
 # ╔═╡ 1e5ba0b1-c129-410c-9048-89a75210fd40
 md"### underdetermined"
 
@@ -727,6 +789,8 @@ viz_θ₀_t₀_distn(θ₀_prior, t₀_prior, chain_θ₀_t₀)
 # ╠═db79cc93-0459-42b2-a800-6a1bc7eec1db
 # ╠═9a4f8bc7-bbc7-42d2-acf2-992d740f9d8b
 # ╠═5cd464bb-710a-4e57-a51a-2ebad433e874
+# ╠═eb3eafea-a182-4972-a008-3a7649c4ef99
+# ╠═2d8add24-9228-4073-b3bb-1f22b1e07b86
 # ╟─1e5ba0b1-c129-410c-9048-89a75210fd40
 # ╠═364f2880-6a27-49a0-b5d4-1c6fd6f43293
 # ╠═4d931a20-2ab7-43c7-91ed-8f4fd40648a5
