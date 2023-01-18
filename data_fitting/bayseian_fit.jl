@@ -64,8 +64,6 @@ end
 function viz_model_only()
 	ts_model = range(0.0, 5.0, length=400)
 
-
-	
 	fig = Figure()
 	ax  = Axis(fig[1, 1], 
 		       xlabel="time, (t - t₀) / λ", 
@@ -94,7 +92,7 @@ function viz_model_only()
 	hidedecorations!(ax_inset)
 	hidespines!(ax_inset)
 	
-	save("figs/model_soln.pdf", fig)
+	save(joinpath("figs", "model_soln.pdf"), fig)
 	return fig
 end
 
@@ -237,7 +235,7 @@ viz_convergence(chain_λ, "λ")
 
 # ╔═╡ a1e622ae-7672-4ca2-bac2-7dcc0a500f1f
 function viz_posterior_prior(chain::Chains, prior::Distribution, 
-	                         var::String, savename::String;
+	                         var::String; savename::Union{String, Nothing},
 	                         true_var=nothing)
 	x = analyze_posterior(chain, var)
 
@@ -285,11 +283,15 @@ function viz_posterior_prior(chain::Chains, prior::Distribution,
 
 	axislegend()
 
+	if ! isnothing(savename)
+		save(joinpath("figs", savename * ".pdf"), fig)
+	end
+
 	fig
 end
 
 # ╔═╡ 294e240f-c146-4ef3-b172-26e70ad3ed19
-viz_posterior_prior(chain_λ, λ_prior, "λ", "param_id_prior_posterior.pdf")
+viz_posterior_prior(chain_λ, λ_prior, "λ", savename="param_id_prior_posterior")
 
 # ╔═╡ bba69cd4-f56f-4e93-af03-f0b3f56e710e
 function _viz_trajectories!(ax, data::DataFrame, θₐᵢᵣ::Float64, chain::Chains)
@@ -298,7 +300,7 @@ function _viz_trajectories!(ax, data::DataFrame, θₐᵢᵣ::Float64, chain::Ch
 	if :t₀ in names(chain)
 		t_lo = minimum(chain["t₀"]) - 0.5
 	end
-	ts = range(t_lo, maximum(data[:, "t [hr]"]), length=100)
+	ts = range(-1.0, 13.0, length=500)
 	for (i, row) in enumerate(eachrow(DataFrame(sample(chain, 100, replace=false))))
 		t₀ = 0.0
 		if :t₀ in names(chain)
@@ -332,6 +334,9 @@ md"## time reversal problem
 
 # ╔═╡ 30bd4bca-4af6-4e1a-8131-75ca18df7a59
 label_for_heldout = rich("held-out (t", subscript("0"), ", θ", subscript("0,obs"), ")")
+
+# ╔═╡ 7f5c6af9-8510-4eff-8cf0-f769e0d2a005
+tr_xlims = [-0.75, 10.1]
 
 # ╔═╡ 7df25291-a600-449e-a194-3ec7c3f11361
 other_run = 11
@@ -380,7 +385,7 @@ function posterior_time_reversal(i_obs::Int)
 end
 
 # ╔═╡ 62c5e645-285d-470e-b46b-00f0471b7329
-i_obs = 17 # and try 10, 17
+i_obs = 10 # and try 10, 17
 
 # ╔═╡ 9af1cae7-59b0-4521-a8f9-a000494b8471
 function _viz_data!(ax, data::DataFrame, i_obs::Int; incl_test=false, incl_legend=true, incl_t₀=true)
@@ -399,7 +404,7 @@ function _viz_data!(ax, data::DataFrame, i_obs::Int; incl_test=false, incl_legen
 		scatter!(data[1, "t [hr]"], data[1, "θ [°C]"], 
 			label=label_for_heldout, strokewidth=1, color="white")
 	end
-	xlims!(-0.5, 1.03*max_t)
+	xlims!(tr_xlims...)
 	ylims!(0, 20)
 end
 
@@ -413,7 +418,7 @@ function viz_data(data::DataFrame, θᵃⁱʳ::Float64; savename=nothing)
 	_viz_data!(ax, data, θᵃⁱʳ)
 	axislegend(position=:rb)
 	if ! isnothing(savename)
-		save(savename, fig)
+		save(joinpath("figs", savename * ".pdf"), fig)
 	end
 	fig
 end
@@ -431,12 +436,12 @@ function viz_trajectories(
 		       ylabel="lime temperature [°C]",
 	)
 	_viz_trajectories!(ax, data, θᵃⁱʳ, chain)
-	_viz_data!(ax, data, θᵃⁱʳ, incl_label=false, incl_t₀=false)
+	_viz_data!(ax, data, θᵃⁱʳ, incl_label=false, incl_t₀=true)
 	
 
 	axislegend(position=:rb)
 	if ! isnothing(savename)
-		save(savename, fig)
+		save(joinpath("figs", savename * ".pdf"), fig)
 	end
 
 	fig
@@ -452,16 +457,16 @@ function viz_data(data::DataFrame, i_obs::Int; savename=nothing, incl_t₀=true)
 	_viz_data!(ax, data, i_obs, incl_t₀=incl_t₀)
 	axislegend(position=:rb)
 	if ! isnothing(savename)
-		save(savename, fig)
+		save(joinpath("figs", savename * ".pdf"), fig)
 	end
 	fig
 end
 
 # ╔═╡ a4192388-5fca-4d61-9cc0-27029032b765
-viz_data(data, θᵃⁱʳ, savename="figs/param_id_data.pdf")
+viz_data(data, θᵃⁱʳ, savename="param_id_data")
 
 # ╔═╡ 8e7ae1d5-fade-4b90-8dd7-e61e965f3609
-viz_data(data_tr, i_obs)
+viz_data(data_tr, i_obs, savename="tr_data")
 
 # ╔═╡ 07b22d3a-d616-4c89-98c6-d7ee1cd314b6
 data_tr[i_obs, :]
@@ -476,7 +481,7 @@ nrow(DataFrame(chain_θ₀))
 viz_convergence(chain_θ₀, "θ₀")
 
 # ╔═╡ db79cc93-0459-42b2-a800-6a1bc7eec1db
-viz_posterior_prior(chain_θ₀, θ₀_prior, "θ₀", "posterior_tr", 
+viz_posterior_prior(chain_θ₀, θ₀_prior, "θ₀", savename="tr_posterior_prior", 
 	true_var=data_tr[1, "θ [°C]"])
 
 # ╔═╡ 9a4f8bc7-bbc7-42d2-acf2-992d740f9d8b
@@ -502,27 +507,31 @@ function viz_trajectories(
 	axislegend(position=:rb)
 
 	if :t₀ in names(chain)
-		xlims!(minimum(DataFrame(chain)[:, "t₀"]), nothing)
+		min_t₀ = minimum(DataFrame(chain)[:, "t₀"])
+		if min_t₀ < tr_xlims[1]
+			error("increase xlims t₀ min = $min_t₀")
+		end
 	end
+	xlims!(tr_xlims...)
 	
 	if ! isnothing(savename)
-		save(savename, fig)
+		save(joinpath("figs", savename * ".pdf"), fig)
 	end
 
 	fig
 end
 
 # ╔═╡ b6b05d1b-5e2f-4082-a7ef-1211024c700b
-viz_trajectories(data, θᵃⁱʳ, chain_λ)
+viz_trajectories(data, θᵃⁱʳ, chain_λ; savename="param_id_trajectory")
 
 # ╔═╡ 5cd464bb-710a-4e57-a51a-2ebad433e874
-viz_trajectories(data_tr, chain_θ₀, i_obs)
+viz_trajectories(data_tr, chain_θ₀, i_obs, savename="tr_trajectories")
 
 # ╔═╡ 1e5ba0b1-c129-410c-9048-89a75210fd40
 md"### underdetermined"
 
 # ╔═╡ 364f2880-6a27-49a0-b5d4-1c6fd6f43293
-viz_data(data_tr, i_obs, incl_t₀=false)
+viz_data(data_tr, i_obs, incl_t₀=false, savename="tr2_data")
 
 # ╔═╡ 4d931a20-2ab7-43c7-91ed-8f4fd40648a5
 t₀_prior = truncated(Normal(0.0, 0.25), -1.0, 1.0)
@@ -553,7 +562,7 @@ model_θ₀_t₀ = likelihood_for_θ₀_t₀(data_tr, i_obs)
 chain_θ₀_t₀ = sample(model_θ₀_t₀, NUTS(), MCMCSerial(), 2_500, 4; progress=true)
 
 # ╔═╡ 8b176631-b5a7-4c2b-afc7-9dacd0d22d0c
-viz_trajectories(data_tr, chain_θ₀_t₀, i_obs, incl_t₀=false)
+viz_trajectories(data_tr, chain_θ₀_t₀, i_obs, incl_t₀=false, savename="tr2_trajectories")
 
 # ╔═╡ 7824672b-e69d-435d-a8ab-d62f014374d3
 function get_ρ_posterior_t₀_θ₀(chain_θ₀_t₀::Chains)
@@ -586,13 +595,13 @@ function viz_θ₀_t₀_distn(θ₀_prior::Distribution,
 		),
 	)
 	
-	fig = Figure(resolution=(600, 600))
-	gl = fig[1, 1] = GridLayout()
-	ax  = Axis(fig[2, 2], xlabel="t₀ [min]", ylabel="θ₀ [°C]", aspect=1)
-	ax_t = Axis(fig[1, 2], ylabel="marginal\ndensity", yticks=[0])
-	ax_r = Axis(fig[2, 3], xlabel="marginal\ndensity", xticks=[0])
-	linkyaxes!(ax_r, ax)
-	linkxaxes!(ax_t, ax)
+	fig = Figure(resolution=(450, 450))
+	ax_t = Axis(fig[1, 1], ylabel="marginal\ndensity", yticks=[0])
+	ax  = Axis(fig[2, 1], xlabel="t₀ [min]", ylabel="θ₀ [°C]")
+	
+	ax_r = Axis(fig[2, 2], xlabel="marginal\ndensity", xticks=[0])
+	linkyaxes!(ax, ax_r)
+	linkxaxes!(ax, ax_t)
 	hidexdecorations!(ax_t)
 	hideydecorations!(ax_r)
 
@@ -615,72 +624,40 @@ function viz_θ₀_t₀_distn(θ₀_prior::Distribution,
 		contour!(ax, t₀s, θ₀s, ρs[p], linewidth=1, 
 		         colormap=the_colormaps[p], label=p, levels=8)
 	end
-		# colormap=the_colormaps[posterior_or_prior], extendhigh=the_colors["distn2"])
 
 	# marginals!
-    ρ_posterior_θ₀ = get_kde_ρ(θ̂₀.samples)
+	# make more dense.
+	θ₀s = vcat(θ₀s, [θ₀_prior.a] .+ [-0.0001, 0.0001], [θ₀_prior.b] .+ [-0.0001, 0.0001])
+	sort!(θ₀s)
+    ρ_posterior_θ₀ = get_kde_ρ(θ̂₀.samples, support=(θ₀_prior.a, θ₀_prior.b))
 	ρ_posterior_t₀ = get_kde_ρ(t̂₀.samples)
-	lines!(ax_t, t₀s, ρ_posterior_t₀.(t₀s), 
+	lpost = lines!(ax_t, t₀s, ρ_posterior_t₀.(t₀s), 
 		color=the_colors["posterior"], linewidth=2)
 	lines!(ax_r, ρ_posterior_θ₀.(θ₀s), θ₀s,
 		color=the_colors["posterior"], linewidth=2)
-	# elseif posterior_or_prior == "prior"
 		
-	# 	# t₀
-	# 	t₀s = [t₀_prior.a - ϵ, t₀_prior.a + ϵ, t₀_prior.b - ϵ, t₀_prior.b + ϵ]
-	# 	ρ_t₀_prior = [pdf(t₀_prior, t₀) for t₀ in t₀s]
-	lines!(ax_t, t₀s, [pdf(t₀_prior, t₀) for t₀ in t₀s], 
+
+	lprio =  lines!(ax_t, t₀s, [pdf(t₀_prior, t₀) for t₀ in t₀s], 
 		color=the_colors["prior"], linewidth=2)
 	lines!(ax_r, [pdf(θ₀_prior, θ₀) for θ₀ in θ₀s], θ₀s, 
 		color=the_colors["prior"], linewidth=2)
-	# 	band!(ax_t, t₀s, zeros(length(t₀s)), ρ_t₀_prior, 
-	# 			color=(the_colors["distn2"], 0.4))
-	# 	# T₀
-	# 	T₀s = [T₀_prior.a - ϵ, T₀_prior.a + ϵ, T₀_prior.b - ϵ, T₀_prior.b + ϵ]
-	# 	ρ_T₀_prior = [pdf(T₀_prior, T₀) for T₀ in T₀s]
-	# 	lines!(ax_r, ρ_T₀_prior, T₀s, color=:black, linewidth=1)
-	# 	band_direction_y!(ax_r, T₀s, 
-	# 		   zeros(length(T₀s)), ρ_T₀_prior, (the_colors["distn2"], 0.4))
-	# end
+
 	# # truth
 	scatter!(ax, data_tr[1, "t [hr]"], data_tr[1, "θ [°C]"], 
 	         label=label_for_heldout, strokewidth=2, color=(:white, 0.0))
-	
-	
-	# # ylims!(ax, 0, nothing)
-	# # xlims!(ax, 0, 150.0)
-	# # ylims!(ax_t, 0, nothing)
-	# xlims!(ax_r, 0, nothing)
-	# ylims!(ax_t, 0, nothing)
 
-	colgap!(gl, 5)
-	rowgap!(gl, 5)
-	# xlims!(ax, minimum(t₀s), maximum(t₀s))
-	# ylims!(ax, minimum(T₀s), maximum(T₀s))
-	rowsize!(fig.layout, 1, Relative(.225))
-	colsize!(fig.layout, 3, Relative(.225))
-	# Colorbar(fig[2, 1], colormap=ColorSchemes.Wistia, ticks=[0], 
-	# 	label="posterior density", flipaxis=false)
-	# save("posterior_theta_0_t_0_i_obs_$(i_obs).pdf", fig)
+	rowsize!(fig.layout, 1, Relative(0.25))
+	colsize!(fig.layout, 2, Relative(0.25))
+	resize_to_layout!(fig)
+	Legend(fig[1, 2], [lprio, lpost], ["prior", "posterior"])
+
+	save(joinpath("figs", "posterior_tr2_$(i_obs).pdf"), fig)
 	fig
 	# ρs
 end
 
 # ╔═╡ 0b0af726-3eb7-4939-bdd5-7b76213d5485
 viz_θ₀_t₀_distn(θ₀_prior, t₀_prior, chain_θ₀_t₀)
-
-# ╔═╡ b14d545e-bc9e-493b-877f-899ec4ddc8fc
-begin
-	# show curve of solutions
-	θ_0s = range(-1, 15.0, length=100)
-	t′ = data2[i_obs, "t [hr]"]
-	θ′ = data2[i_obs, "T [°C]"]
-	λ̄ = analyze_posterior(chain_τ, "τ").μ
-	t_0s = t′ .- λ̄ * log.((θ_0s .- fixed_params2.Tₐ) ./ (θ′ - fixed_params2.Tₐ))
-end
-
-# ╔═╡ 8ba02a50-98f8-4c83-9f4f-040a1aad8274
-md"to check..."
 
 # ╔═╡ Cell order:
 # ╟─b1c06c4d-9b4d-4af3-9e9b-3ba993ca83a0
@@ -727,6 +704,7 @@ md"to check..."
 # ╠═f184e3ea-82f9-49f4-afb6-99c609d7936f
 # ╟─d8e026b9-8943-437e-a08b-2395de35d705
 # ╠═30bd4bca-4af6-4e1a-8131-75ca18df7a59
+# ╠═7f5c6af9-8510-4eff-8cf0-f769e0d2a005
 # ╠═7df25291-a600-449e-a194-3ec7c3f11361
 # ╠═8f145533-7208-4c25-9b1e-84370c7ac7ca
 # ╠═4cc1ebb3-9c22-4a05-9a09-82b81073aa79
@@ -757,5 +735,3 @@ md"to check..."
 # ╠═7824672b-e69d-435d-a8ab-d62f014374d3
 # ╠═f8092ba3-54c7-4e2d-a885-f5ef6c6e094e
 # ╠═0b0af726-3eb7-4939-bdd5-7b76213d5485
-# ╠═b14d545e-bc9e-493b-877f-899ec4ddc8fc
-# ╟─8ba02a50-98f8-4c83-9f4f-040a1aad8274
