@@ -527,12 +527,16 @@ viz_trajectories(data, θᵃⁱʳ, chain_λ; savename="param_id_trajectories")
 # ╔═╡ 5cd464bb-710a-4e57-a51a-2ebad433e874
 viz_trajectories(data_tr, chain_θ₀, i_obs, savename="tr_trajectories")
 
+# ╔═╡ 44357419-04ad-4f20-8830-35f33eef9171
+data_tr
+
 # ╔═╡ eb3eafea-a182-4972-a008-3a7649c4ef99
 function ridge_plot()
 	i_obss = [2 * i for i = 1:8]
+	push!(i_obss, 17)
 	make_ridge_like = true
-	cmap = ColorSchemes.Wistia
-	crange = (0.0, 2.0)
+	cmap = ColorSchemes.summer
+	crange = (0.0, 3.0)
 	
 	fig = Figure(resolution=(the_resolution[1], the_resolution[2]*1.5))
 	axs = [Axis(fig[i, 1], yticks=[0]) for i = 1:length(i_obss)]
@@ -582,7 +586,7 @@ function ridge_plot()
 	end
 	Label(fig[:, 0], "posterior density", rotation=pi/2, font=AoG.firasans("Light"))
 	Colorbar(fig[:, 2], colormap=cmap, limits=crange, label="measurement time, t′ [hr]")
-	save("ridge_plot.pdf", fig)
+	save("figs/ridge_plot.pdf", fig)
 	fig
 end
 
@@ -789,6 +793,7 @@ viz_θ₀_t₀_distn(θ₀_prior, t₀_prior, chain_θ₀_t₀)
 # ╠═db79cc93-0459-42b2-a800-6a1bc7eec1db
 # ╠═9a4f8bc7-bbc7-42d2-acf2-992d740f9d8b
 # ╠═5cd464bb-710a-4e57-a51a-2ebad433e874
+# ╠═44357419-04ad-4f20-8830-35f33eef9171
 # ╠═eb3eafea-a182-4972-a008-3a7649c4ef99
 # ╠═2d8add24-9228-4073-b3bb-1f22b1e07b86
 # ╟─1e5ba0b1-c129-410c-9048-89a75210fd40
