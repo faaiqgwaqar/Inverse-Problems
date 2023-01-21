@@ -166,7 +166,7 @@ run = 12
 data = load("data_run_$run.jld2")["data"]
 
 # ╔═╡ b2b83a4e-54b0-4743-80c2-d81ac2d394e2
-θᵃⁱʳ = load("data_run_$run.jld2")["θᵃⁱʳ"]
+θᵃⁱʳ_obs = data[end, "θ [°C]"]
 
 # ╔═╡ 2da4df4f-7bd1-4a40-97f3-4861c486e2d6
 function _viz_data!(ax, data::DataFrame, θᵃⁱʳ::Float64; incl_label=true, incl_t₀=true)
@@ -177,7 +177,7 @@ function _viz_data!(ax, data::DataFrame, θᵃⁱʳ::Float64; incl_label=true, i
 	end
 	# air temp
 	hlines!(ax, θᵃⁱʳ, style=:dash, linestyle=:dot, 
-		label=incl_label ? rich("θ", superscript("air")) : nothing, color=the_colors["air"])
+		label=incl_label ? rich("θ", superscript("air"), subscript("obs")) : nothing, color=the_colors["air"])
 	# data
 	scatter!(data[:, "t [hr]"], data[:, "θ [°C]"], 
 		label=incl_label ? rich("{(t", subscript("i"), ", θ", subscript("i,obs"), ")}") : nothing, strokewidth=1, color=the_colors["data"])
@@ -202,6 +202,7 @@ md"🥝 priors"
 
 	# use first and last data pts as prior.
 	θ₀ ~ Normal(data[1, "θ [°C]"], σ)
+	θᵃⁱʳ ~ Normal(θᵃⁱʳ_obs, σ)
 	
 	t₀ = 0.0
 
@@ -275,7 +276,7 @@ function viz_posterior_prior(chain::Chains, prior::Distribution,
 	# truth
 	if ! isnothing(true_var)
 		vlines!(true_var, color="black", linestyle=:dash, 
-			linewidth=1, label=rich("held-out θ", subscript("0,obs")))
+			linewidth=1, label=rich("θ", subscript("0,obs")))
 	end
 
 	ylims!(0, nothing)
@@ -345,7 +346,7 @@ other_run = 11
 data_tr = load("data_run_$other_run.jld2")["data"]
 
 # ╔═╡ 4cc1ebb3-9c22-4a05-9a09-82b81073aa79
-θᵃⁱʳ_tr = load("data_run_$other_run.jld2")["θᵃⁱʳ"]
+θᵃⁱʳ_obs_tr = data_tr[end, "θ [°C]"]
 
 # ╔═╡ ac6f1d8d-4402-4737-82f6-4fd098b93b5e
 md"use prior on τ from last outcome."
@@ -366,13 +367,14 @@ md"use prior on τ from last outcome."
 	if data[i_obs, "θ [°C]"] > θ₀_prior.b
 		error("prior makes no sense")
 	end
-	
+
 	σ ~ σ_prior_tr
 	λ ~ λ_prior_tr
+	θᵃⁱʳ ~ Normal(θᵃⁱʳ_obs_tr, σ)
 
     # Observation
 	tᵢ = data[i_obs, "t [hr]"]
-	μ = θ_model(tᵢ, λ, 0.0, θ₀, θᵃⁱʳ_tr)
+	μ = θ_model(tᵢ, λ, 0.0, θ₀, θᵃⁱʳ)
 	data[i_obs, "θ [°C]"] ~ Normal(μ, σ)
 
     return nothing
@@ -395,8 +397,8 @@ function _viz_data!(ax, data::DataFrame, i_obs::Int; incl_test=false, incl_legen
 		vlines!(ax, [0.0], color="gray", linewidth=1, label=incl_legend ? "t₀" : nothing)
 	end
 	# air temp
-	hlines!(ax, θᵃⁱʳ_tr, style=:dash, linestyle=:dot, 
-		label=incl_legend ? rich("θ", superscript("air")) : nothing, color=the_colors["air"])
+	hlines!(ax, θᵃⁱʳ_obs_tr, style=:dash, linestyle=:dot, 
+		label=incl_legend ? rich("θ", superscript("air"), subscript("obs")) : nothing, color=the_colors["air"])
 	# data
 	scatter!(data[i_obs, "t [hr]"], data[i_obs, "θ [°C]"], 
 		label=incl_legend ? rich("(t', θ'", subscript("obs"), ")") : nothing, strokewidth=1, color=the_colors["data"])
@@ -463,7 +465,7 @@ function viz_data(data::DataFrame, i_obs::Int; savename=nothing, incl_t₀=true)
 end
 
 # ╔═╡ a4192388-5fca-4d61-9cc0-27029032b765
-viz_data(data, θᵃⁱʳ, savename="param_id_data")
+viz_data(data, θᵃⁱʳ_obs, savename="param_id_data")
 
 # ╔═╡ 8e7ae1d5-fade-4b90-8dd7-e61e965f3609
 viz_data(data_tr, i_obs, savename="tr_data")
@@ -499,7 +501,7 @@ function viz_trajectories(
 	)
 
 	# trajectories
-	_viz_trajectories!(ax, data, θᵃⁱʳ_tr, chain)
+	_viz_trajectories!(ax, data, θᵃⁱʳ_obs_tr, chain)
 	
 	# data
 	_viz_data!(ax, data, i_obs, incl_test=true, incl_legend=false, incl_t₀=incl_t₀)
@@ -522,7 +524,7 @@ function viz_trajectories(
 end
 
 # ╔═╡ b6b05d1b-5e2f-4082-a7ef-1211024c700b
-viz_trajectories(data, θᵃⁱʳ, chain_λ; savename="param_id_trajectories")
+viz_trajectories(data, θᵃⁱʳ_obs, chain_λ; savename="param_id_trajectories")
 
 # ╔═╡ 5cd464bb-710a-4e57-a51a-2ebad433e874
 viz_trajectories(data_tr, chain_θ₀, i_obs, savename="tr_trajectories")
@@ -565,9 +567,12 @@ function ridge_plot()
 			color="black", linewidth=1)
 		band!(axs[i], θ₀s, zeros(length(θ₀s)), ρ,
 			color=(color, 0.2))
-		if i == 1
-			vlines!(axs[i], data_tr[1, "θ [°C]"], color="black", linestyle=:dash, linewidth=1)
-		end
+		# if i == 1
+			scatter!(axs[i], [data_tr[1, "θ [°C]"]], [0], overdraw=true, 
+				marker='|', markersize=15, color="black"
+			)
+			# vlines!(axs[i], data_tr[1, "θ [°C]"], color="black", linestyle=:dash, linewidth=1)
+		# end
 		Label(fig[i, 1], @sprintf("t′ = %.2f hr", t′), 
 			tellwidth=false, tellheight=false, halign=0.9, valign=0.0,
 			font=AoG.firasans("Light"), fontsize=14
@@ -612,10 +617,11 @@ t₀_prior = truncated(Normal(0.0, 0.25), -1.0, 1.0)
 	σ ~ σ_prior_tr
 	λ ~ λ_prior_tr
 	t₀ ~ t₀_prior
-
+	θᵃⁱʳ ~ Normal(θᵃⁱʳ_obs_tr, σ)
+	
     # Observation
 	tᵢ = data[i_obs, "t [hr]"]
-	μ = θ_model(tᵢ, λ, t₀, θ₀, θᵃⁱʳ_tr)
+	μ = θ_model(tᵢ, λ, t₀, θ₀, θᵃⁱʳ)
 	data[i_obs, "θ [°C]"] ~ Normal(μ, σ)
 
     return nothing

@@ -38,7 +38,7 @@ function read_data(filename::String)
 end
 
 # ╔═╡ 3c2e28af-1506-4ca6-be48-4e38bd67097d
-run = 12 # run 11 and 12
+run = 11 # run 11 and 12
 
 # ╔═╡ 60a97118-1fc1-403b-97fa-fce162e8d6fd
 filename = "limev$run.csv"
@@ -132,7 +132,7 @@ function downsample(data::DataFrame, n_per_block::Int, n_blocks::Int=5)
 end
 
 # ╔═╡ e35322f8-5065-43ef-a846-77de00f4d065
-downsampled_data = downsample(data, 4, 5)
+downsampled_data = downsample(data, 5, 4)
 
 # ╔═╡ e51f13f6-a48f-4ced-a028-62e8f745b7c3
 T̄ₐ
