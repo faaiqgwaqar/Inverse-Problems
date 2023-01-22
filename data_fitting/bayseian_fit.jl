@@ -47,7 +47,9 @@ the_colors = Dict("air"        => my_colors[1],
 	              "data"       => my_colors[2],
 	              "model"      => my_colors[3], 
 	              "prior"      => my_colors[4],
-	              "posterior"  => my_colors[5])
+	              "posterior"  => my_colors[5],
+				  "other"      => my_colors[6]
+)
 
 # ╔═╡ 3ae0b235-5ade-4c30-89ac-7f0480c0da11
 md"## the model"
@@ -327,6 +329,27 @@ end
 # ╔═╡ f184e3ea-82f9-49f4-afb6-99c609d7936f
 cor(DataFrame(chain_λ)[:, "σ"], DataFrame(chain_λ)[:, "λ"])
 
+# ╔═╡ 08f81d83-4d56-473a-a6ad-a1fffff773a5
+md"### residuals"
+
+# ╔═╡ 49bdc1a3-8920-4d32-862b-46098f430605
+function viz_residuals(chain_λ)
+	λ̄ = mean(chain_λ[:λ])
+	θ̄₀ = mean(chain_λ[:θ₀])
+	θ̄ᵃⁱʳ = mean(chain_λ[:θᵃⁱʳ])
+
+	fig = Figure()
+	ax  = Axis(fig[1, 1], xlabel="time [hr]", ylabel="residual [°C]")
+	scatter!(data[:, "t [hr]"],
+		θ_model.(data[:, "t [hr]"], λ̄, 0.0, θ̄₀, θ̄ᵃⁱʳ) .- data[:, "θ [°C]"]
+	)
+	hlines!(0.0, color="black", linestyle=:dash)
+	fig
+end
+
+# ╔═╡ 55704643-9e73-4d2d-b0f9-638f5c375659
+viz_residuals(chain_λ)
+
 # ╔═╡ d8e026b9-8943-437e-a08b-2395de35d705
 md"## time reversal problem
 
@@ -534,7 +557,7 @@ data_tr
 
 # ╔═╡ eb3eafea-a182-4972-a008-3a7649c4ef99
 function ridge_plot()
-	i_obss = [2 * i for i = 1:8]
+	i_obss = [2 * i - 1 for i = 1:8]
 	push!(i_obss, 17)
 	make_ridge_like = true
 	cmap = ColorSchemes.summer
@@ -567,12 +590,11 @@ function ridge_plot()
 			color="black", linewidth=1)
 		band!(axs[i], θ₀s, zeros(length(θ₀s)), ρ,
 			color=(color, 0.2))
-		# if i == 1
-			scatter!(axs[i], [data_tr[1, "θ [°C]"]], [0], overdraw=true, 
-				marker='|', markersize=15, color="black"
-			)
-			# vlines!(axs[i], data_tr[1, "θ [°C]"], color="black", linestyle=:dash, linewidth=1)
-		# end
+
+		scatter!(axs[i], [data_tr[1, "θ [°C]"]], [0], overdraw=true, 
+			marker='|', markersize=15, color=the_colors["other"]
+		)
+
 		Label(fig[i, 1], @sprintf("t′ = %.2f hr", t′), 
 			tellwidth=false, tellheight=false, halign=0.9, valign=0.0,
 			font=AoG.firasans("Light"), fontsize=14
@@ -631,7 +653,7 @@ end
 model_θ₀_t₀ = likelihood_for_θ₀_t₀(data_tr, i_obs)
 
 # ╔═╡ 14bee7d1-dadc-41be-9ea0-1420cd68a121
-chain_θ₀_t₀ = sample(model_θ₀_t₀, NUTS(), MCMCSerial(), 2_500, 4; progress=true)
+chain_θ₀_t₀ = sample(model_θ₀_t₀, NUTS(), MCMCSerial(), 5000, 4; progress=true)
 
 # ╔═╡ 8b176631-b5a7-4c2b-afc7-9dacd0d22d0c
 viz_trajectories(data_tr, chain_θ₀_t₀, i_obs, incl_t₀=false, savename="tr2_trajectories")
@@ -733,6 +755,9 @@ end
 # ╔═╡ 0b0af726-3eb7-4939-bdd5-7b76213d5485
 viz_θ₀_t₀_distn(θ₀_prior, t₀_prior, chain_θ₀_t₀)
 
+# ╔═╡ a7cd4e2c-41f2-4c7f-8dac-69589bdc3f5a
+md"## minimal example for paper"
+
 # ╔═╡ Cell order:
 # ╟─b1c06c4d-9b4d-4af3-9e9b-3ba993ca83a0
 # ╠═43bcf4b0-fbfc-11ec-0e23-bb05c02078c9
@@ -776,6 +801,9 @@ viz_θ₀_t₀_distn(θ₀_prior, t₀_prior, chain_θ₀_t₀)
 # ╟─7a01dfaf-fae1-4a8c-a8a2-1ac973bf3197
 # ╠═f20159ad-7f8b-484e-95ea-afdac97f876a
 # ╠═f184e3ea-82f9-49f4-afb6-99c609d7936f
+# ╟─08f81d83-4d56-473a-a6ad-a1fffff773a5
+# ╠═49bdc1a3-8920-4d32-862b-46098f430605
+# ╠═55704643-9e73-4d2d-b0f9-638f5c375659
 # ╟─d8e026b9-8943-437e-a08b-2395de35d705
 # ╠═30bd4bca-4af6-4e1a-8131-75ca18df7a59
 # ╠═7f5c6af9-8510-4eff-8cf0-f769e0d2a005
@@ -812,3 +840,4 @@ viz_θ₀_t₀_distn(θ₀_prior, t₀_prior, chain_θ₀_t₀)
 # ╠═7824672b-e69d-435d-a8ab-d62f014374d3
 # ╠═f8092ba3-54c7-4e2d-a885-f5ef6c6e094e
 # ╠═0b0af726-3eb7-4939-bdd5-7b76213d5485
+# ╟─a7cd4e2c-41f2-4c7f-8dac-69589bdc3f5a
