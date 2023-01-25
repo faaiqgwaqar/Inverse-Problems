@@ -310,7 +310,7 @@ function _viz_trajectories!(ax, data::DataFrame, θₐᵢᵣ::Float64, chain::Ch
 			t₀ = row["t₀"]
 		end
 		lines!(ts, θ_model.(ts, row["λ"], t₀, row["θ₀"], θₐᵢᵣ),
-			   color=(the_colors["model"], 0.1), label=i == 1 ? "model" : nothing)
+			   color=(the_colors["model"], 0.1), label=i == 1 ? "posterior model" : nothing)
 	end
 end
 
@@ -633,7 +633,7 @@ md"### underdetermined"
 viz_data(data_tr, i_obs, incl_t₀=false, savename="tr2_data")
 
 # ╔═╡ 4d931a20-2ab7-43c7-91ed-8f4fd40648a5
-t₀_prior = truncated(Normal(0.0, 0.25), -1.0, 1.0)
+t₀_prior = truncated(Normal(-0.1, 0.25), -1.0, 1.0)
 
 # ╔═╡ 8b1f8a44-612c-4032-93a7-7b0c21c47c31
 @model function likelihood_for_θ₀_t₀(data, i_obs)
@@ -708,7 +708,7 @@ function viz_θ₀_t₀_distn(θ₀_prior::Distribution,
 	t̂₀ = analyze_posterior(chain_θ₀_t₀, :t₀)
 	θ̂₀ = analyze_posterior(chain_θ₀_t₀, :θ₀)
 	
-	t₀s = range(-0.6, 0.6, length=100)
+	t₀s = range(-0.75, 0.6, length=100)
 	θ₀s = range(-0.5, 20.5, length=101)
 
 	# joint!
