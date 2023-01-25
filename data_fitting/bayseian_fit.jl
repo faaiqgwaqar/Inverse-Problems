@@ -493,11 +493,17 @@ viz_data(data, θᵃⁱʳ_obs, savename="param_id_data")
 # ╔═╡ 8e7ae1d5-fade-4b90-8dd7-e61e965f3609
 viz_data(data_tr, i_obs, savename="tr_data")
 
+# ╔═╡ e53ddd3b-5dc0-4621-9af3-930c52c51af8
+data_tr[1, :]
+
 # ╔═╡ 07b22d3a-d616-4c89-98c6-d7ee1cd314b6
 data_tr[i_obs, :]
 
 # ╔═╡ efdf4047-81ab-45db-9980-267df2bad314
 chain_θ₀ = posterior_time_reversal(i_obs)
+
+# ╔═╡ a77c0f34-64e8-4a2a-a292-3a201d086b80
+analyze_posterior(chain_θ₀, :θ₀)
 
 # ╔═╡ 6e4c92c2-ab69-4ac7-9144-05cc3b8b0dd9
 nrow(DataFrame(chain_θ₀))
@@ -729,12 +735,22 @@ function viz_θ₀_t₀_distn(θ₀_prior::Distribution,
 		color=the_colors["posterior"], linewidth=2)
 	lines!(ax_r, ρ_posterior_θ₀.(θ₀s), θ₀s,
 		color=the_colors["posterior"], linewidth=2)
+	# ci
+	ci_t₀ = analyze_posterior(chain_θ₀_t₀, :t₀)
+	lines!(ax_t, [ci_t₀.lb, ci_t₀.ub], zeros(2), color="black", 
+		linewidth=4)
+	ci_θ₀ = analyze_posterior(chain_θ₀_t₀, :θ₀)
+	lines!(ax_r, zeros(2), [ci_θ₀.lb, ci_θ₀.ub], color="black", 
+		linewidth=4)
 		
 
 	lprio =  lines!(ax_t, t₀s, [pdf(t₀_prior, t₀) for t₀ in t₀s], 
 		color=the_colors["prior"], linewidth=2)
 	lines!(ax_r, [pdf(θ₀_prior, θ₀) for θ₀ in θ₀s], θ₀s, 
 		color=the_colors["prior"], linewidth=2)
+
+	ylims!(ax_t, 0, nothing)
+	xlims!(ax_r, 0, nothing)
 
 	# # truth
 	s = scatter!(ax, data_tr[1, "t [hr]"], data_tr[1, "θ [°C]"], 
@@ -820,8 +836,10 @@ md"## minimal example for paper"
 # ╠═9af1cae7-59b0-4521-a8f9-a000494b8471
 # ╠═b00bc0b4-c33e-4f5e-98f9-68085bd3d94d
 # ╠═8e7ae1d5-fade-4b90-8dd7-e61e965f3609
+# ╠═e53ddd3b-5dc0-4621-9af3-930c52c51af8
 # ╠═07b22d3a-d616-4c89-98c6-d7ee1cd314b6
 # ╠═efdf4047-81ab-45db-9980-267df2bad314
+# ╠═a77c0f34-64e8-4a2a-a292-3a201d086b80
 # ╠═6e4c92c2-ab69-4ac7-9144-05cc3b8b0dd9
 # ╠═3f954d0a-3f4e-43c9-b028-f2abdc83792a
 # ╠═db79cc93-0459-42b2-a800-6a1bc7eec1db
