@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.19
+# v0.19.20
 
 using Markdown
 using InteractiveUtils
@@ -168,7 +168,7 @@ run = 12
 data = load("data_run_$run.jld2")["data"]
 
 # ╔═╡ b2b83a4e-54b0-4743-80c2-d81ac2d394e2
-θᵃⁱʳ_obs = data[end, "θ [°C]"]
+θᵃⁱʳ_obs = load("data_run_$run.jld2")["θᵃⁱʳ"]
 
 # ╔═╡ 2da4df4f-7bd1-4a40-97f3-4861c486e2d6
 function _viz_data!(ax, data::DataFrame, θᵃⁱʳ::Float64; incl_label=true, incl_t₀=true)
@@ -209,7 +209,7 @@ md"🥝 priors"
 	t₀ = 0.0
 
     # Observations.
-    for i in 2:nrow(data)-1
+    for i in 2:nrow(data)
 		tᵢ = data[i, "t [hr]"]
 		μ = θ_model(tᵢ, λ, t₀, θ₀, θᵃⁱʳ)
         data[i, "θ [°C]"] ~ Normal(μ, σ)
@@ -369,7 +369,7 @@ other_run = 11
 data_tr = load("data_run_$other_run.jld2")["data"]
 
 # ╔═╡ 4cc1ebb3-9c22-4a05-9a09-82b81073aa79
-θᵃⁱʳ_obs_tr = data_tr[end, "θ [°C]"]
+θᵃⁱʳ_obs_tr = load("data_run_$other_run.jld2")["θᵃⁱʳ"]
 
 # ╔═╡ ac6f1d8d-4402-4737-82f6-4fd098b93b5e
 md"use prior on τ from last outcome."
@@ -659,7 +659,7 @@ end
 model_θ₀_t₀ = likelihood_for_θ₀_t₀(data_tr, i_obs)
 
 # ╔═╡ 14bee7d1-dadc-41be-9ea0-1420cd68a121
-chain_θ₀_t₀ = sample(model_θ₀_t₀, NUTS(), MCMCSerial(), 5000, 4; progress=true)
+chain_θ₀_t₀ = sample(model_θ₀_t₀, NUTS(), MCMCSerial(), 5000, 5; progress=true)
 
 # ╔═╡ 8b176631-b5a7-4c2b-afc7-9dacd0d22d0c
 viz_trajectories(data_tr, chain_θ₀_t₀, i_obs, incl_t₀=false, savename="tr2_trajectories")
