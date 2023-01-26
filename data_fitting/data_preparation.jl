@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.19
+# v0.19.20
 
 using Markdown
 using InteractiveUtils
@@ -113,7 +113,8 @@ function downsample(data::DataFrame, n_per_block::Int, n_blocks::Int=5)
 
 	new_data = data[[1, end], :] # keep initial condition
 
-	Random.seed!(97330)
+	Random.seed!(run == 12 ? 97330 : 97329)
+
 	for b = 1:n_blocks
 		# get data from this block
 		data_this_block = filter(
@@ -121,14 +122,24 @@ function downsample(data::DataFrame, n_per_block::Int, n_blocks::Int=5)
 			data
 		)
 		nb_sample = n_per_block
-		if b == 1 || b == n_blocks
+		if b == 1 #|| b == n_blocks
 			nb_sample -= 1
 		end
 		ids_sample = sample(1:nrow(data_this_block), nb_sample, replace=false)
 		new_data = vcat(new_data, data_this_block[ids_sample, :])
 	end
 
-	return sort(new_data, "t [min]")
+	new_data = sort(new_data, "t [min]")
+	
+	# # remove if within 2 min of each other.
+	id_keep = trues(nrow(new_data))
+	for i = 2:nrow(new_data)
+		if new_data[i, "t [min]"] - new_data[i-1, "t [min]"] < 5
+			id_keep[i] = false
+		end
+	end
+
+	return new_data[id_keep, :]
 end
 
 # ╔═╡ e35322f8-5065-43ef-a846-77de00f4d065
@@ -141,7 +152,7 @@ T̄ₐ
 Tₐ = data[end, "T [°C]"]
 
 # ╔═╡ 9c6d23d9-fcc2-4704-86c5-50a13d6af2e0
-viz_data(downsampled_data, T̄ₐ, shld_i_save=true)
+viz_data(downsampled_data, Tₐ, shld_i_save=true)
 
 # ╔═╡ a5535284-1d62-4748-b9c8-c28fa2dc3eb3
 md"## export data for other tasks"
@@ -156,7 +167,7 @@ select!(downsampled_data, ["t [hr]", "T [°C]"])
 rename!(downsampled_data, "T [°C]" => "θ [°C]")
 
 # ╔═╡ 322c60c0-1e04-4bd8-a3f9-2802e8deb605
-jldsave("data_run_$run.jld2"; data=downsampled_data, θᵃⁱʳ=T̄ₐ)
+jldsave("data_run_$run.jld2"; data=downsampled_data[1:end-1, :], θᵃⁱʳ=data[end, "T [°C]"])
 
 # ╔═╡ Cell order:
 # ╠═38925e1a-817b-4575-9768-02fb68bec2d6

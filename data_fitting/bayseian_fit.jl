@@ -410,7 +410,7 @@ function posterior_time_reversal(i_obs::Int)
 end
 
 # ╔═╡ 62c5e645-285d-470e-b46b-00f0471b7329
-i_obs = 10 # and try 10, 17
+i_obs = 6 # and try 10, 17
 
 # ╔═╡ 9af1cae7-59b0-4521-a8f9-a000494b8471
 function _viz_data!(ax, data::DataFrame, i_obs::Int; incl_test=false, incl_legend=true, incl_t₀=true)
@@ -563,8 +563,8 @@ data_tr
 
 # ╔═╡ eb3eafea-a182-4972-a008-3a7649c4ef99
 function ridge_plot()
-	i_obss = [2 * i - 1 for i = 1:8]
-	push!(i_obss, 17)
+	i_obss = [2 * i - 1 for i = 1:7]
+	# push!(i_obss, 17)
 	make_ridge_like = true
 	cmap = ColorSchemes.summer
 	crange = (0.0, 3.0)
@@ -580,7 +580,7 @@ function ridge_plot()
 	
 	θ₀s = range(0.0, 20.0, length=100)
 	for (i, i_obs) in enumerate(i_obss)
-		t′ = data[i_obs, "t [hr]"]
+		t′ = data_tr[i_obs, "t [hr]"]
 		color = get(cmap, t′, crange)
 		if i != length(i_obss)
 			hidexdecorations!(axs[i])
@@ -656,13 +656,20 @@ t₀_prior = truncated(Normal(-0.1, 0.25), -1.0, 1.0)
 end
 
 # ╔═╡ 845bdbf7-f30e-4f0c-a8db-6f272e76eec9
+# ╠═╡ disabled = true
+#=╠═╡
 model_θ₀_t₀ = likelihood_for_θ₀_t₀(data_tr, i_obs)
+  ╠═╡ =#
 
 # ╔═╡ 14bee7d1-dadc-41be-9ea0-1420cd68a121
+#=╠═╡
 chain_θ₀_t₀ = sample(model_θ₀_t₀, NUTS(), MCMCSerial(), 5000, 5; progress=true)
+  ╠═╡ =#
 
 # ╔═╡ 8b176631-b5a7-4c2b-afc7-9dacd0d22d0c
+#=╠═╡
 viz_trajectories(data_tr, chain_θ₀_t₀, i_obs, incl_t₀=false, savename="tr2_trajectories")
+  ╠═╡ =#
 
 # ╔═╡ 7824672b-e69d-435d-a8ab-d62f014374d3
 function get_ρ_posterior_t₀_θ₀(chain_θ₀_t₀::Chains)
@@ -769,7 +776,9 @@ function viz_θ₀_t₀_distn(θ₀_prior::Distribution,
 end
 
 # ╔═╡ 0b0af726-3eb7-4939-bdd5-7b76213d5485
+#=╠═╡
 viz_θ₀_t₀_distn(θ₀_prior, t₀_prior, chain_θ₀_t₀)
+  ╠═╡ =#
 
 # ╔═╡ a7cd4e2c-41f2-4c7f-8dac-69589bdc3f5a
 md"## minimal example for paper"
