@@ -721,7 +721,7 @@ function viz_θ₀_t₀_distn(θ₀_prior::Distribution,
 	ρs["posterior"] = [ρ_posterior([θ₀, t₀])
 						for t₀ in t₀s, θ₀ in θ₀s]
 	for p in ["prior", "posterior"]
-		contour!(ax, t₀s, θ₀s, ρs[p], linewidth=1, 
+		contour!(ax, t₀s, θ₀s, ρs[p], linewidth=2, 
 		         colormap=the_colormaps[p], label=p, levels=8)
 	end
 
@@ -751,6 +751,7 @@ function viz_θ₀_t₀_distn(θ₀_prior::Distribution,
 
 	ylims!(ax_t, 0, nothing)
 	xlims!(ax_r, 0, nothing)
+	ylims!(ax_r, -0.5, 20.5)
 
 	# # truth
 	s = scatter!(ax, data_tr[1, "t [hr]"], data_tr[1, "θ [°C]"], 
@@ -758,6 +759,15 @@ function viz_θ₀_t₀_distn(θ₀_prior::Distribution,
 	vlines!(ax_t, data_tr[1, "t [hr]"], color="black", linestyle=:dash, linewidth=1)
 	hlines!(ax_r, data_tr[1, "θ [°C]"], color="black", linestyle=:dash, linewidth=1)
 
+	# classical solution
+	t′ = data_tr[i_obs, "t [hr]"]
+	θ′ = data_tr[i_obs, "θ [°C]"]
+	λ̄ = λ_posterior.μ
+		
+	lines!(ax,
+		t₀s,
+		[θᵃⁱʳ_obs_tr + (θ′ - θᵃⁱʳ_obs_tr) * exp((t′ - t₀) / λ̄) for t₀ in t₀s], color=the_colors["model"], linestyle=:dash, linewidth=1)
+	ylims!(ax, 0, 20)
 	rowsize!(fig.layout, 1, Relative(0.25))
 	colsize!(fig.layout, 2, Relative(0.25))
 	resize_to_layout!(fig)
@@ -770,6 +780,9 @@ end
 
 # ╔═╡ 0b0af726-3eb7-4939-bdd5-7b76213d5485
 viz_θ₀_t₀_distn(θ₀_prior, t₀_prior, chain_θ₀_t₀)
+
+# ╔═╡ 660ed613-6523-4077-8aec-79998c4eaa44
+i_obs
 
 # ╔═╡ a7cd4e2c-41f2-4c7f-8dac-69589bdc3f5a
 md"## minimal example for paper"
@@ -858,4 +871,5 @@ md"## minimal example for paper"
 # ╠═7824672b-e69d-435d-a8ab-d62f014374d3
 # ╠═f8092ba3-54c7-4e2d-a885-f5ef6c6e094e
 # ╠═0b0af726-3eb7-4939-bdd5-7b76213d5485
+# ╠═660ed613-6523-4077-8aec-79998c4eaa44
 # ╟─a7cd4e2c-41f2-4c7f-8dac-69589bdc3f5a
