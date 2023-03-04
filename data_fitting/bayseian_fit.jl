@@ -112,7 +112,7 @@ function viz_changing_T₀()
 	my_colormap = ColorSchemes.cool
 	θ₀_to_color(θ₀) = get(my_colormap, θ₀, θ₀_lims)
 	
-	fig = Figure()
+	fig = Figure(resolution=(the_resolution[1]*1.1, the_resolution[2]))
 	ax  = Axis(fig[1, 1], 
 		       xlabel="time, (t - t₀) / λ", 
 		       ylabel="lime temperature, θ(t)",
@@ -130,6 +130,7 @@ function viz_changing_T₀()
 		colormap=my_colormap, label="initial temperature, θ₀ [°C]")
 	ylims!(-0.05, 1.05)
 	xlims!(-0.1, 5.0)
+	# inset w lime
 	save("range_of_initial_conditions.pdf", fig)
 	return fig
 end
@@ -169,7 +170,7 @@ function viz_convergence(chain::Chains, var::String)
 	
 	labels = Dict("λ" => "λ [hr]", "θ₀" => "θ₀[°C]")
 	
-	fig = Figure(resolution=(the_resolution[1], the_resolution[2]*2))
+	fig = Figure(resolution=(the_resolution[1], the_resolution[2]*1.4))
 	axs = [Axis(fig[i, 1]) for i = 1:2]
 	for (r, c) in enumerate(groupby(DataFrame(chain), "chain"))
 		lines!(axs[1], c[:, "iteration"], c[:, var], linewidth=1)
