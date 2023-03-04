@@ -101,6 +101,42 @@ end
 # ╔═╡ 8ee1b06d-c255-4ae3-ac8b-06f7498dbf76
 viz_model_only()
 
+# ╔═╡ 89b87083-d8df-4ad8-a1e5-3e7f47cc3f9b
+function viz_changing_T₀()
+	# set up ranges
+	ts_model = range(-0.5, 5.0, length=400)
+	θ₀s = range(0.0, 1.0, length=9)
+	θ₀_lims = (minimum(θ₀s), maximum(θ₀s))
+
+	# set up colormap
+	my_colormap = ColorSchemes.cool
+	θ₀_to_color(θ₀) = get(my_colormap, θ₀, θ₀_lims)
+	
+	fig = Figure()
+	ax  = Axis(fig[1, 1], 
+		       xlabel="time, (t - t₀) / λ", 
+		       ylabel="lime temperature, θ(t)",
+		       yticks=([0.0, 1.0], ["0", "θₐᵢᵣ"])
+	)
+	hlines!(0, linewidth=1, color="lightgray")
+	vlines!(0, linewidth=1, color="lightgray")
+	for θ₀ in θ₀s
+		# θ_model(t, λ, t₀, θ₀, θᵃⁱʳ)
+		lines!(ts_model, [θ_model(tᵢ, 1.0, 0, θ₀, 1.0) for tᵢ in ts_model], 
+			   color=θ₀_to_color(θ₀)
+		)
+	end
+	Colorbar(fig[1,2], limits=θ₀_lims, ticks=([0.0, 1.0], ["0", "θₐᵢᵣ"]),
+		colormap=my_colormap, label="initial temperature, θ₀ [°C]")
+	ylims!(-0.05, 1.05)
+	xlims!(-0.1, 5.0)
+	save("range_of_initial_conditions.pdf", fig)
+	return fig
+end
+
+# ╔═╡ 73831a43-15e5-47c0-8d68-b0c8dde7db9a
+viz_changing_T₀()
+
 # ╔═╡ 38304191-f930-41a6-8545-4734a5ad4ecf
 md"## helpers for BSI"
 
@@ -801,6 +837,8 @@ md"## minimal example for paper"
 # ╠═a13ba151-99c1-47ae-b96e-dc90464990b6
 # ╠═ee7fd372-22b0-4bf5-a5e9-5e3a5b6e1843
 # ╠═8ee1b06d-c255-4ae3-ac8b-06f7498dbf76
+# ╠═89b87083-d8df-4ad8-a1e5-3e7f47cc3f9b
+# ╠═73831a43-15e5-47c0-8d68-b0c8dde7db9a
 # ╟─38304191-f930-41a6-8545-4734a5ad4ecf
 # ╠═ff7e4fd8-e34b-478e-ab8a-2f35aba99ba6
 # ╠═9e78c280-c19b-469b-8a2b-3c9f4b92a2e5
