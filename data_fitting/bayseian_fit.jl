@@ -376,11 +376,12 @@ function viz_residuals(chain_λ)
 	θ̄ᵃⁱʳ = mean(chain_λ[:θᵃⁱʳ])
 
 	fig = Figure()
-	ax  = Axis(fig[1, 1], xlabel="time [hr]", ylabel="residual [°C]")
+	ax  = Axis(fig[1, 1], xlabel="time [hr]", ylabel="residual, θᵢ - θ(tᵢ) [°C]")
 	scatter!(data[:, "t [hr]"],
 		θ_model.(data[:, "t [hr]"], λ̄, 0.0, θ̄₀, θ̄ᵃⁱʳ) .- data[:, "θ [°C]"]
 	)
 	hlines!(0.0, color="black", linestyle=:dash)
+	save("residuals.pdf", fig)
 	fig
 end
 
