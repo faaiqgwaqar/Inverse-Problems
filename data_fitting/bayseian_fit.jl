@@ -377,16 +377,41 @@ function viz_residuals(chain_λ)
 
 	fig = Figure()
 	ax  = Axis(fig[1, 1], xlabel="time [hr]", ylabel="residual, θᵢ - θ(tᵢ) [°C]")
-	scatter!(data[:, "t [hr]"],
-		θ_model.(data[:, "t [hr]"], λ̄, 0.0, θ̄₀, θ̄ᵃⁱʳ) .- data[:, "θ [°C]"]
-	)
+	resids = data[:, "θ [°C]"] .- θ_model.(data[:, "t [hr]"], λ̄, 0.0, θ̄₀, θ̄ᵃⁱʳ)
+	@show maximum(abs.(resids))
+	scatter!(data[:, "t [hr]"], resids)
 	hlines!(0.0, color="black", linestyle=:dash)
 	save("residuals.pdf", fig)
 	fig
 end
 
-# ╔═╡ 55704643-9e73-4d2d-b0f9-638f5c375659
-viz_residuals(chain_λ)
+# ╔═╡ 9ab23808-0bb4-4956-a930-3762321ee679
+function viz_residuals_box(chain_λ)
+	n_models = length(chain_λ)
+	n_data = nrow(data)
+	resids = zeros(n_data, n_models)
+
+	fig = Figure()
+	ax  = Axis(fig[1, 1], xlabel="time [hr]", ylabel="residual, θᵢ - θ(tᵢ) [°C]")
+	# loop over model.
+	for i = 1:n_models
+		# sample this model.
+		row = DataFrame(chain_λ)[i, :]
+		λ, θ₀, θᵃⁱʳ = row["λ"], row["θ₀"], row["θᵃⁱʳ"]
+		# compute residuals
+		resids[:, i] = data[:, "θ [°C]"] .- θ_model.(data[:, "t [hr]"], λ, 0.0, θ₀, θᵃⁱʳ)
+	end
+	hlines!(0.0, color="gray", linestyle=:dash)
+	# return resids
+	boxplot!(vcat([data[:, "t [hr]"] for i = 1:n_models]...), 
+		vcat(eachcol(resids)...), color="green", width=0.2, show_outliers=false)
+	
+	save("residuals_box.pdf", fig)
+	fig
+end
+
+# ╔═╡ 9858f954-9e2e-4ac1-8587-ac2e3ff8be94
+viz_residuals_box(chain_λ)
 
 # ╔═╡ d8e026b9-8943-437e-a08b-2395de35d705
 md"## time reversal problem
@@ -872,7 +897,8 @@ md"## minimal example for paper"
 # ╠═f184e3ea-82f9-49f4-afb6-99c609d7936f
 # ╟─08f81d83-4d56-473a-a6ad-a1fffff773a5
 # ╠═49bdc1a3-8920-4d32-862b-46098f430605
-# ╠═55704643-9e73-4d2d-b0f9-638f5c375659
+# ╠═9ab23808-0bb4-4956-a930-3762321ee679
+# ╠═9858f954-9e2e-4ac1-8587-ac2e3ff8be94
 # ╟─d8e026b9-8943-437e-a08b-2395de35d705
 # ╠═30bd4bca-4af6-4e1a-8131-75ca18df7a59
 # ╠═7f5c6af9-8510-4eff-8cf0-f769e0d2a005
