@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.20
+# v0.19.27
 
 using Markdown
 using InteractiveUtils
@@ -311,6 +311,7 @@ function viz_posterior_prior(chain::Chains, prior::Distribution,
 	# ci
 	lines!([x.lb, x.ub], zeros(2), color="black", 
 		linewidth=6)
+	@show [x.lb, x.ub]
 
 	# truth
 	if ! isnothing(true_var)
@@ -333,8 +334,11 @@ end
 # ╔═╡ 294e240f-c146-4ef3-b172-26e70ad3ed19
 viz_posterior_prior(chain_λ, λ_prior, "λ", savename="param_id_prior_posterior")
 
+# ╔═╡ 887d5dbc-1103-4530-8010-2e265a4b5d25
+DataFrame(chain_λ)[:, :θᵃⁱʳ]
+
 # ╔═╡ bba69cd4-f56f-4e93-af03-f0b3f56e710e
-function _viz_trajectories!(ax, data::DataFrame, θₐᵢᵣ::Float64, chain::Chains)
+function _viz_trajectories!(ax, data::DataFrame, chain::Chains)
 	# model
 	t_lo = -0.5
 	if :t₀ in names(chain)
@@ -346,7 +350,7 @@ function _viz_trajectories!(ax, data::DataFrame, θₐᵢᵣ::Float64, chain::Ch
 		if :t₀ in names(chain)
 			t₀ = row["t₀"]
 		end
-		lines!(ts, θ_model.(ts, row["λ"], t₀, row["θ₀"], θₐᵢᵣ),
+		lines!(ts, θ_model.(ts, row["λ"], t₀, row["θ₀"], row["θᵃⁱʳ"]),
 			   color=(the_colors["model"], 0.1), label=i == 1 ? "posterior model" : nothing)
 	end
 end
@@ -510,10 +514,9 @@ function viz_trajectories(
 		       xlabel="time, t [hr]",
 		       ylabel="lime temperature [°C]",
 	)
-	_viz_trajectories!(ax, data, θᵃⁱʳ, chain)
+	_viz_trajectories!(ax, data, chain)
 	_viz_data!(ax, data, θᵃⁱʳ, incl_label=false, incl_t₀=true)
 	
-
 	axislegend(position=:rb)
 	if ! isnothing(savename)
 		save(joinpath("figs", savename * ".pdf"), fig)
@@ -580,7 +583,7 @@ function viz_trajectories(
 	)
 
 	# trajectories
-	_viz_trajectories!(ax, data, θᵃⁱʳ_obs_tr, chain)
+	_viz_trajectories!(ax, data, chain)
 	
 	# data
 	_viz_data!(ax, data, i_obs, incl_test=true, incl_legend=false, incl_t₀=incl_t₀)
@@ -834,9 +837,6 @@ viz_θ₀_t₀_distn(θ₀_prior, t₀_prior, chain_θ₀_t₀)
 # ╔═╡ 660ed613-6523-4077-8aec-79998c4eaa44
 i_obs
 
-# ╔═╡ a7cd4e2c-41f2-4c7f-8dac-69589bdc3f5a
-md"## minimal example for paper"
-
 # ╔═╡ Cell order:
 # ╟─b1c06c4d-9b4d-4af3-9e9b-3ba993ca83a0
 # ╠═43bcf4b0-fbfc-11ec-0e23-bb05c02078c9
@@ -876,6 +876,7 @@ md"## minimal example for paper"
 # ╠═31c747b3-0ff1-4fae-9707-47f258d4018f
 # ╠═a1e622ae-7672-4ca2-bac2-7dcc0a500f1f
 # ╠═294e240f-c146-4ef3-b172-26e70ad3ed19
+# ╠═887d5dbc-1103-4530-8010-2e265a4b5d25
 # ╠═bba69cd4-f56f-4e93-af03-f0b3f56e710e
 # ╠═cd46a3c7-ae78-4f3c-8ba6-c4a55d598843
 # ╠═b6b05d1b-5e2f-4082-a7ef-1211024c700b
@@ -924,4 +925,3 @@ md"## minimal example for paper"
 # ╠═f8092ba3-54c7-4e2d-a885-f5ef6c6e094e
 # ╠═0b0af726-3eb7-4939-bdd5-7b76213d5485
 # ╠═660ed613-6523-4077-8aec-79998c4eaa44
-# ╟─a7cd4e2c-41f2-4c7f-8dac-69589bdc3f5a
