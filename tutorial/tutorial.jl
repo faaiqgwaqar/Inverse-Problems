@@ -7,7 +7,7 @@ using InteractiveUtils
 # ╔═╡ b8591bca-2318-11ee-17af-a7bc61c5e4d4
 begin
 	import Pkg; Pkg.activate()
-	using CairoMakie, Turing, DataFrames, PlutoUI, CSV, Statistics, StatsBase
+	using CairoMakie, Turing, DataFrames, PlutoUI, CSV, Statistics, StatsBase, ColorSchemes
 
 	update_theme!(fontsize=18, resolution=(0.9*500, 0.9*380))
 end
@@ -17,14 +17,21 @@ TableOfContents()
 
 # ╔═╡ b110d3e4-fc4a-48c0-a8e9-50f0dba3837c
 md"
-# problem setup
+# a coding tutorial for Bayesian statistical inversion (BSI)
+_author_: Cory Simon
+
+_email_: $\texttt{cory.simon}$ [at] $\texttt{oregonstate.edu}$
+
 !!! note
-	this is a minimal/simplified tutorial of Bayesian statistical inversion (BSI) for inverse problems, following the problem setup and using the data in:
+	this is a minimal/simplified coding tutorial for Bayesian statistical inversion (BSI), following the problem setup in and using the data from our paper:
 	> F. Waqar, S. Patel, C. Simon. \"A tutorial on the Bayesian statistical approach to inverse problems\" _APL Machine Learning_. (2023) [link](https://arxiv.org/abs/2304.07610)
+	see our paper for more details.
 
-	this tutorial is in the [Julia programming language](https://julialang.org/), within a [Pluto notebook](https://plutojl.org/), and largely relies on the probabalistic programming package [`Turing.jl`](https://turing.ml/).
+	this coding tutorial is in the [Julia programming language](https://julialang.org/), within a [Pluto notebook](https://plutojl.org/). we largely rely on the probabalistic programming library, [`Turing.jl`](https://turinglang.org/dev/docs/using-turing/), whose docs contain another relevant tutorial [\"Bayesian Estimation of Differential Equations\"](https://turinglang.org/dev/tutorials/10-bayesian-differential-equations/).
 
-## setup of lime heat transfer experiment
+## problem setup
+
+### setup of lime heat transfer experiment
 a cold lime fruit at temperature $\theta_0$ [°C] rests inside of a refrigerator. at time $t:=0$ [hr], we take the lime outside of the refrigerator and allow it exchange heat with the indoor air, which is at temperature $\theta^{\text{air}}$ [°C]. a temperature probe inserted into the lime allows us to measure the temperature of the lime, $\theta=\theta(t)$ [°C].
 "
 
@@ -32,8 +39,8 @@ a cold lime fruit at temperature $\theta_0$ [°C] rests inside of a refrigerator
 html"<img src=\"https://raw.githubusercontent.com/faaiqgwaqar/Inverse-Problems/main/tutorial/lime_setup.jpeg\" width=400>"
 
 # ╔═╡ 8649c024-57e7-4918-a97c-b04cd3a0ce36
-md"## forward model of the lime temperature
-we treat the temperature of the lime as spatially uniform. our mathematical model for the temperature of the lime as a function of time $t$ [hr] is:
+md"### forward model of the lime temperature
+our mathematical model for the temperature of the lime, approximated as spatially uniform, as a function of time $t$ [hr] is:
 ```math
 \begin{equation}
     \theta (t)=\theta^{\text{air}}+(\theta_0-\theta^{\text{air}})e^{-t/\lambda}, \quad \text{for } t\geq 0. 
@@ -52,33 +59,33 @@ function θ(t, λ, θ₀, θᵃⁱʳ)
 end
 
 # ╔═╡ bc95e270-27f6-4812-8a83-0d9d0262e474
-md"## probabilistic model of the temperature measurements
+md"### probabilistic model of the temperature measurements
 we use the forward model to construct a probabalistic model of the measured lime temperature. we assume any observed measurement $\theta_{\text{obs}}$ [°C] of the lime temperature at time $t \geq 0$ is a realization of a random variable $\Theta_{\text{obs}}$ with a Gaussian distribution
 ```math
 \begin{equation}
     \Theta_{\text{obs}} \mid \lambda, \theta_0, \theta^{\text{air}}, \sigma \sim \mathcal{N}(\theta(t; \lambda, \theta_0, \theta^{\text{air}}), \sigma^2)
 \end{equation}
 ```
-with a mean governed by the model $\theta(t)$ and variance $\sigma^2$ owing to measurement noise and zero-mean residual variability. we treat multiple measurements as independent and identically distributed. this distribution of $\Theta_{\text{obs}}$ is conditioned on knowing the values of $\lambda, \theta_0, \theta^{\text{air}}, \sigma$. it will be used to construct the likelihood function.
+with a mean governed by the model $\theta(t)$ and variance $\sigma^2$ owing to measurement noise and zero-mean residual variability. we treat multiple measurements as independent and identically distributed. this distribution of $\Theta_{\text{obs}}$ is conditioned on knowing the values of $\lambda, \theta_0, \theta^{\text{air}}, \sigma$. after we collect the data, the likelihood function follows from this probabilistic model of the temperature measurements.
 "
 
 # ╔═╡ 9f72d5fb-c614-4f21-bdb9-2fbc9ebe2361
-md"# parameter identification
+md"## parameter identification
 
 🔨 **task**: infer the parameter $\Lambda$ (capitalized $\lambda$, because we treat it as a random variable) in the model of the lime temperature.
 
-**sub-tasks**: infer the:
+**sub-tasks**: infer the (also treated as random variables):
 * variance of the measurement noise, $\Sigma^2$.
 * initial lime temperature $\Theta_0$, even though we will take a (noisy) measurement of it.
 * air temperature $\Theta^{\text{air}}$, even though we will take a (noisy) measurement of it.
 
-## setting up the heat transfer experiment
+### setting up the heat transfer experiment
 
 first, we setup the lime heat transfer experiment and make two measurements to characterize the experimental conditions.
 
 🌡 we use the temperature probe to measure:
-* the initial temperature of the lime $\theta_0$ at time $t=0$, giving $\theta_{0, \text{obs}}$.
-* the air temperature $\theta^{\text{air}}$, giving $\theta^{\text{air}}_\text{obs}$.
+* the initial temperature of the lime $\theta_0$ at time $t=0$, giving datum $\theta_{0, \text{obs}}$.
+* the air temperature $\theta^{\text{air}}$, giving datum $\theta^{\text{air}}_\text{obs}$.
 "
 
 # ╔═╡ 2908489a-e2f0-4470-850c-c46565b2ea0e
@@ -88,11 +95,11 @@ first, we setup the lime heat transfer experiment and make two measurements to c
 θᵃⁱʳ_obs = 18.47 # °C
 
 # ╔═╡ 21822a96-a519-4585-92b1-c23d838fb5a6
-md"## the prior distributions
+md"### the prior distributions
 
 next, we construct prior distributions to reflect the information and beliefs we have about the unknowns ($\lambda$, $\theta_0$, $\theta^{\text{air}}$, $\sigma$) _before_ we collect and consider time series data over the course of the lime heat transfer experiment.
 
-**the unknown model parameter**. based on a back-of-the-envelope estimate of $\lambda$ and our confidence in this estimate, our prior for $\Lambda$ is a spread-out Gaussian distribution centered at our estimate for it, of 1 hr:
+**the unknown model parameter**. based on a back-of-the-envelope estimate of $\lambda$ and our confidence in this estimate, our prior for $\Lambda$ is a spread-out, truncated-below-zero Gaussian distribution centered at our estimate of it ($\lambda\approx 1$ hr):
 ```math
 \begin{equation}
     \Lambda \sim \mathcal{N}_{> 0} \left(1 \text{ hr}, (0.3\text{ hr})^2 \right).
@@ -107,7 +114,7 @@ next, we construct prior distributions to reflect the information and beliefs we
 ```
 where $\mathcal{U}(\cdot)$ is a uniform distribution over the set $\cdot$.
 
-**experimental conditions**. we construct informative distributions for the initial lime temperature and air temperature, since we have measured these:
+**experimental conditions**. we construct informative prior distributions for the initial lime temperature and air temperature, since we have measured these:
 ```math
 \begin{align}
     \Theta_0 & \sim \mathcal{N}(\theta_{0, \text{obs}}, \sigma^2) \\ 
@@ -118,16 +125,16 @@ where $\sigma$ is unknown and the values $\theta_{0, \text{obs}}$ and $\theta_{\
 "
 
 # ╔═╡ d44fc256-55af-490d-a643-21fb07950f7c
-md"## the data
+md"### the data
 
-🌡 we measure the temperature of the lime at different times as it exchanges heat with the indoor air. this gives a time series data set $\{(t_i, \theta_{i, \text{obs}})\}_{i=1}^n$ we read in the raw data from a `.csv` file.
+🌡 we measure the temperature of the lime at different times as it exchanges heat with the indoor air. this gives a time series data set $\{(t_i, \theta_{i, \text{obs}})\}_{i=1}^{10}$. we read in the raw data from a `.csv` file available [here](https://raw.githubusercontent.com/faaiqgwaqar/Inverse-Problems/main/tutorial/lime_temp_param_id.csv).
 "
 
 # ╔═╡ 2f593ee3-f6ca-4397-9e09-bd9761720f29
 data = CSV.read("lime_temp_param_id.csv", DataFrame)
 
-# ╔═╡ 7db78800-3c44-4b46-9d72-3ef041b21708
-n = nrow(data)
+# ╔═╡ 9e86ddd1-0663-4cad-9e42-bf100900d96f
+md"let's plot the time series data along with the measured initial lime temperature and air temperature."
 
 # ╔═╡ 9bf8a9dd-a6d4-45e5-bf5f-cc830e6daae9
 begin
@@ -145,22 +152,37 @@ end
 
 # ╔═╡ 40a3e0f9-78b8-4028-a829-c3eb1a0d87dd
 md"
-💡 this data provides information about the unknown model parameter $\lambda$ _and_ the variance of the noise corrupting our measurements $\sigma$ (_and_, to a lesser-extent than our direct measurements of them, $\theta_0$ and $\theta^{\text{air}}$).
-
+💡 this data provides information about the unknown model parameter $\lambda$ _and_ the variance of the noise corrupting our measurements $\sigma$ (_and_, to a lesser-extent than our direct measurements of them, $\theta_0$ and $\theta^{\text{air}}$). we can even visually inspect the time series to roughly estimate $\lambda$, since it represents a time scale for the lime to thermally equilibrate with the air. specifically, at time $t=\lambda$, 
+```math
+\begin{equation}
+\theta(\lambda)= \theta^\text{air} + e^{-1}(\theta_0- \theta^\text{air}) \implies \theta^\text{air}-\theta(\lambda) \approx 0.37(\theta^\text{air} - \theta_0)
+\end{equation}
+```
+meaning the difference between the air and lime temperature at $t=\lambda$ is $\sim$37% of the initial difference. from \"eye-balling\" the plot, we see indeed $\lambda \approx 1$ as our back-of-the-envelope calculation suggests.
 "
 
 # ╔═╡ c0ff232c-5f9e-4612-9ad4-ae5c4c19217f
-md"## the posterior distribution
+md"### the posterior distribution
 
-we seek the posterior distribution
+we seek the posterior distribution regarding the values of the unknowns in the inverse problem in light of the time series data:
 ```math
 \begin{equation}
-\Lambda, \Theta_0, \Theta^{\text{air}}, \Sigma \mid \theta_{0, \text{obs}}, \theta_{\text{obs}}^{\text{air}}, \{(t_i, \theta_{i, \text{obs}})\}_{i=1}^n
+\Lambda, \Theta_0, \Theta^{\text{air}}, \Sigma \mid \{(t_i, \theta_{i, \text{obs}})\}_{i=1}^{10}
 \end{equation}
 ```
-which follows from (i) our prior distributions and (ii) our probabilistic forward model, which provides the likelihood function.
+which follows from (i) our prior distributions and (ii) our probabilistic forward model (determining the likelihood function, though we do not explicitly code it up here).
 
-in the probabilistic programming pardigm implemented `Turing.jl`, we obtain the posterior distribution by first coding the prior and probabilistic forward model. then, `Turing.jl` employs a Markov chain Monte Carlo algoirthm (NUTS) to draw (serially correlated) samples from the posterior distribution. we then approximate the posterior distribution with an empirical distribution constructed from these samples.
+in the probabilistic programming paradigm implemented in `Turing.jl`, we obtain the posterior distribution by:
+1. coding the
+    * prior distributions.
+    * probabilistic forward model governing how each data point $(t_i, \theta_{i, \text{obs}})$ is generated.
+2. calling the Markov chain Monte Carlo (NUTS) sampler to draw (serially correlated) samples from the posterior distribution. 
+3. approximating the posterior distribution with an empirical distribution constructed from these samples.
+
+!!! note
+	see the docs of [`Turing.jl`](https://turinglang.org/dev/docs/using-turing/) for more details about its probabilistic programming approach to Bayesian inference.
+
+step 1:
 "
 
 # ╔═╡ b96d3466-a21a-4383-b8fa-db9e1b69773f
@@ -168,42 +190,68 @@ in the probabilistic programming pardigm implemented `Turing.jl`, we obtain the 
     # prior distributions
 	λ    ~ truncated(Normal(1.0, 0.3), 0.0, nothing) # hr
     σ    ~ Uniform(0.0, 1.0) # °C
-    θ₀   ~ Normal(θ₀_obs, σ)
-    θᵃⁱʳ ~ Normal(θᵃⁱʳ_obs, σ)
+    θ₀   ~ Normal(θ₀_obs, σ) # °C
+    θᵃⁱʳ ~ Normal(θᵃⁱʳ_obs, σ) # °C
 
-    # probabilistic forward model
+    # probabilistic data-generating process
     for i = 1:nrow(data)
+		# the time stamp
         tᵢ = data[i, "t [hr]"]
+		# the model prediction
         θ̄ = θ(tᵢ, λ, θ₀, θᵃⁱʳ)
+		# the likelihood
         data[i, "θ_obs [°C]"] ~ Normal(θ̄, σ)
 	end
 end
+
+# ╔═╡ 6d83d92f-7010-4973-bcbf-5f26479f5ea2
+md"step 2: (each row of `chain` may be treated as a sample from the posterior distribution)"
 
 # ╔═╡ 09f1fed0-30e2-421e-8807-1264c8f142d0
 begin
 	mlts_model = measure_lime_temp_time_series(data)
 		
-	nb_samples = 2_500
-	nb_chains = 4
+	nb_samples = 2_500 # per chain
+	nb_chains = 4      # independent chains
 	chain = DataFrame(
 		sample(mlts_model, NUTS(), MCMCSerial(), nb_samples, nb_chains)
 	)
 end
 
+# ╔═╡ cc2ae7a6-99db-4c22-ac72-530631a3cdef
+md"comparing dist'n of $\Lambda$ over the four independent chains (a convergence diagnostic---they should approximately match)"
+
+# ╔═╡ db781bcd-0950-4b7b-969f-08f1cc4a2449
+begin
+	local fig = Figure()
+	local ax = Axis(fig[1, 1], xlabel="λ [hr]", ylabel="# samples")
+	for (i, c) in enumerate(groupby(chain, "chain"))
+		hist!(c[:, "λ"], color=(ColorSchemes.Accent_4[i], 0.5))
+	end
+	fig
+end
+
+# ╔═╡ 2c2b6580-2743-4a94-8285-c1166d63df1e
+md"step 3: 
+the histogram below serves as an approximation to the posterior distribution of $\Lambda$, with the other variables ($\Theta_0$, $\Theta^{\text{air}}$, and $\Sigma^2$) marginalized out. the vertical line denotes the mean of the posterior of $\Lambda$, and the black bar denotes the 90% equal-tailed credible interval for $\Lambda$."
+
 # ╔═╡ 923ca5f2-8730-4387-8555-de2a53a79d3b
 md"posterior mean $\Lambda$:"
 
 # ╔═╡ 14a77fc0-798f-4507-93b8-e9f04d664a9b
-μ_λ = mean(chain[:, :λ]) # hr
+μ_λ = mean(chain[:, "λ"]) # hr
+
+# ╔═╡ 5cb9345b-4ad5-4a90-b5d1-5017c2be5b11
+md"posterior standard deviation of $\Lambda$:"
+
+# ╔═╡ 7d425e50-22be-4e38-8ac6-125ec81cf294
+σ_λ = std(chain[:, "λ"]) # hr
 
 # ╔═╡ b9bd7754-e45b-4e47-a6ef-71045aded2b7
 md"90% equal-tailed posterior credible interval for $\Lambda$:"
 
 # ╔═╡ 2cba4785-44f2-4cb2-8e77-b63489609661
-ci_λ = [percentile(chain[:, :λ], 5.0), percentile(chain[:, :λ], 95.0)]
-
-# ╔═╡ 2c2b6580-2743-4a94-8285-c1166d63df1e
-md"the histogram below serves as an approximation to the posterior distribution of $\Lambda$, with the other variables ($\Theta_0$, $\Theta^{\text{air}}$, and $\Sigma^2$) marginalized out. the vertical line denotes the mean of the posterior of $\Lambda$, and the black bar denotes the 90% equal-tailed credible interval for $\Lambda$."
+ci_λ = [percentile(chain[:, "λ"], 5.0), percentile(chain[:, "λ"], 95.0)]
 
 # ╔═╡ 34651997-a213-4ebd-a8bc-b76b7d14bb69
 begin
@@ -217,8 +265,11 @@ begin
 	fig
 end
 
+# ╔═╡ 65efd4db-9e7d-4674-abd7-4f30f957ab5a
+md"🚀 voila, the histogram above represents our posterior beliefs about the parameter $\lambda$ in light of the data!"
+
 # ╔═╡ dd688e57-d441-4fa3-ba4f-cfed0baf1725
-md"samples from posterior models of lime temperature trajectories:"
+md"we also visualize the posterior distribution by looking at samples from posterior models of lime temperature trajectories (orange)."
 
 # ╔═╡ f45b7e47-902d-4c9b-b28b-7a320bf8a16e
 begin
@@ -243,6 +294,147 @@ begin
 	fig
 end
 
+# ╔═╡ ff00cbb3-90ad-4dcf-9eca-78ae30fc1657
+md"we also compute the mean and variance of the posterior for $\Sigma$, which we will used in the time reversal problem we tackle next."
+
+# ╔═╡ dc54ee6b-75a8-444c-9d78-921b2230f0b8
+μ_σ = mean(chain[:, "σ"])
+
+# ╔═╡ 6c667be8-4b38-4977-8e50-5884bcadb7d0
+σ_σ = std(chain[:, "σ"])
+
+# ╔═╡ 476374b4-c5de-42d0-9f5e-cfe606fbac99
+md"## time reversal
+🔨 **task**: at time $t^\prime>0$ (the duration since the lime was taken out of the refrigerator), infer the initial (at time $t=0$) lime temperature $\Theta_0$.
+"
+
+# ╔═╡ 2b9ca0d3-828d-4016-a3d7-2b7b9ccecde7
+t′ = 0.68261 # hr
+
+# ╔═╡ 09316442-97e1-47d9-8c9b-4226ecb593cf
+md"
+**sub-tasks**: infer the:
+* variance of the measurement noise, $\Sigma^2$, even though we have information about it from our parameter identification activity above.
+* air temperature $\Theta^{\text{air}}$, even though we will take a (noisy) measurement of it.
+
+### the heat transfer experiment
+
+we conduct another lime heat transfer experiment.
+
+🌡 to determine the condition of the experiment, we use the temperature probe to measure the air temperature $\theta^{\text{air}}$, giving datum $\theta^{\text{air}}_\text{obs}$.
+"
+
+# ╔═╡ 51ab4d7e-387f-40c9-99ab-33d817dee4f7
+θᵃⁱʳ_obs_2 = 18.64 # °C
+
+# ╔═╡ 4eda374d-772c-41da-b02b-0f07921fd64c
+md"### the prior distributions
+
+**the initial temperature of the lime**. based on a (generous) range of temperatures encountered in refrigerators, we impose a diffuse prior
+```math
+\begin{equation}
+    \Theta_0\sim \mathcal{U}([0\,^\circ\text{C}, 20\,^\circ\text{C}]).
+\end{equation}
+```
+
+**the model parameter**. 
+
+> yesterday's posterior is today's prior
+
+based on the posterior for $\Lambda$ above, our informative prior on $\Lambda$ is:
+```math
+\begin{equation}
+    \Lambda \sim \mathcal{N}_{> 0} \left(\mu_\lambda, \sigma_\lambda^2 \right).
+\end{equation}
+```
+where $\mu_\lambda$ and $\sigma_\lambda$ are defined a few cells above.
+
+**variance of measurement noise**. 
+
+> yesterday's posterior is today's prior
+
+based on the posterior for $\Sigma$ above, our informative prior on $\Sigma$ is:
+```math
+\begin{equation}
+    \Sigma \sim \mathcal{N}_{> 0}(\mu_\sigma, \sigma_\sigma^2),
+\end{equation}
+```
+where $\mu_\sigma$ and $\sigma_\sigma$ are defined a few cells above.
+
+**the air temperature**. we construct an informative prior distribution for the air temperature, since we have measured it:
+```math
+\begin{equation}
+    \Theta^{\text{air}} \sim \mathcal{N}(\theta_{\text{obs}}^{\text{air}}, \sigma^2).
+\end{equation}
+```
+where $\theta_{\text{obs}}^{\text{air}}$ is defined in the cell above.
+"
+
+# ╔═╡ 0f907a4b-5a78-4666-8fb1-222828ffdf84
+md"### the data
+
+🌡 at time $t^\prime$, we measure the lime temperature $\theta_{\text{obs}}^\prime$.
+"
+
+# ╔═╡ 82b9b6a0-ba28-4dab-a9fc-7ba57c6ce27b
+θ′_obs = 12.16 # °C
+
+# ╔═╡ 2c6cc92a-4b1d-49ed-9f48-f352adc52b50
+data2 = DataFrame("t [hr]"=>[t′], "θ_obs [°C]"=>[θ′_obs])
+
+# ╔═╡ e5eaf808-8eed-4e97-837b-8c57d3f11edd
+md"### the posterior distribution
+
+again, we code our prior distributions and the likelihood, then sample from the posterior using `Turing.jl`.
+"
+
+# ╔═╡ 64ad2f95-06c3-4a57-b0aa-f662715f8c19
+@model function measure_lime_temp_later(data2)
+    # prior distributions
+	λ    ~ truncated(Normal(μ_λ, σ_λ), 0.0, nothing) # hr
+    σ    ~ truncated(Normal(μ_σ, σ_σ), 0.0, nothing) # °C
+    θ₀   ~ Uniform(0.0, 20.0) # °C
+    θᵃⁱʳ ~ Normal(θᵃⁱʳ_obs_2, σ) # °C
+
+    # probabilistic data-generating process
+	# the model prediction
+	θ̄ = θ(t′, λ, θ₀, θᵃⁱʳ)
+	# the likelihood
+	data2[1, "θ_obs [°C]"] ~ Normal(θ̄, σ)
+end
+
+# ╔═╡ 350a8e6f-57a0-408e-9d3f-2ac674d38135
+chain2 = DataFrame(
+	sample(measure_lime_temp_later(data2), NUTS(), MCMCSerial(), nb_samples, nb_chains)
+)
+
+# ╔═╡ c87aa335-11d0-4dce-970e-d536435f7a31
+md"posterior mean of $\Theta_0$"
+
+# ╔═╡ 2c355bb2-ebfc-42a1-bb3b-e01a6666abef
+μ_θ₀ = mean(chain2[:, "θ₀"])
+
+# ╔═╡ a840d3cb-c1a9-42a9-8367-c6824fc00b1b
+md"90% equal-tailed posterior credible interval for $\Theta_0$" 
+
+# ╔═╡ b9ee5918-06cb-41bd-9d7f-7f40e245dab2
+ci_θ₀ = [percentile(chain2[:, "θ₀"], 5.0), percentile(chain2[:, "θ₀"], 95.0)]
+
+# ╔═╡ 1427ff0e-25f7-4436-8019-3d8f2dca7359
+begin
+	local fig = Figure()
+	local ax  = Axis(fig[1, 1], xlabel="θ₀ [°C]", ylabel="# samples", 
+		title="posterior dist'n of Θ₀")
+	hist!(chain2[:, "θ₀"])
+	ylims!(0, nothing)
+	vlines!([μ_θ₀], linestyle=:dash, color=Cycled(2))
+	lines!(ci_θ₀, zeros(2), color="black", linewidth=10)
+	fig
+end
+
+# ╔═╡ 9938c3e5-20f7-455f-8113-b9e2f9e37eb7
+md"🚀 voila, the distribution above represents our posterior beliefs about the initial lime temperature, in light of the data!"
+
 # ╔═╡ Cell order:
 # ╠═b8591bca-2318-11ee-17af-a7bc61c5e4d4
 # ╠═7e0a601d-9081-4d45-983a-7c39c8be28af
@@ -257,17 +449,43 @@ end
 # ╟─21822a96-a519-4585-92b1-c23d838fb5a6
 # ╟─d44fc256-55af-490d-a643-21fb07950f7c
 # ╠═2f593ee3-f6ca-4397-9e09-bd9761720f29
-# ╠═7db78800-3c44-4b46-9d72-3ef041b21708
+# ╟─9e86ddd1-0663-4cad-9e42-bf100900d96f
 # ╠═9bf8a9dd-a6d4-45e5-bf5f-cc830e6daae9
 # ╟─40a3e0f9-78b8-4028-a829-c3eb1a0d87dd
 # ╟─c0ff232c-5f9e-4612-9ad4-ae5c4c19217f
 # ╠═b96d3466-a21a-4383-b8fa-db9e1b69773f
+# ╟─6d83d92f-7010-4973-bcbf-5f26479f5ea2
 # ╠═09f1fed0-30e2-421e-8807-1264c8f142d0
+# ╟─cc2ae7a6-99db-4c22-ac72-530631a3cdef
+# ╠═db781bcd-0950-4b7b-969f-08f1cc4a2449
+# ╟─2c2b6580-2743-4a94-8285-c1166d63df1e
 # ╟─923ca5f2-8730-4387-8555-de2a53a79d3b
 # ╠═14a77fc0-798f-4507-93b8-e9f04d664a9b
+# ╟─5cb9345b-4ad5-4a90-b5d1-5017c2be5b11
+# ╠═7d425e50-22be-4e38-8ac6-125ec81cf294
 # ╟─b9bd7754-e45b-4e47-a6ef-71045aded2b7
 # ╠═2cba4785-44f2-4cb2-8e77-b63489609661
-# ╟─2c2b6580-2743-4a94-8285-c1166d63df1e
 # ╠═34651997-a213-4ebd-a8bc-b76b7d14bb69
+# ╟─65efd4db-9e7d-4674-abd7-4f30f957ab5a
 # ╟─dd688e57-d441-4fa3-ba4f-cfed0baf1725
 # ╠═f45b7e47-902d-4c9b-b28b-7a320bf8a16e
+# ╟─ff00cbb3-90ad-4dcf-9eca-78ae30fc1657
+# ╠═dc54ee6b-75a8-444c-9d78-921b2230f0b8
+# ╠═6c667be8-4b38-4977-8e50-5884bcadb7d0
+# ╟─476374b4-c5de-42d0-9f5e-cfe606fbac99
+# ╠═2b9ca0d3-828d-4016-a3d7-2b7b9ccecde7
+# ╟─09316442-97e1-47d9-8c9b-4226ecb593cf
+# ╠═51ab4d7e-387f-40c9-99ab-33d817dee4f7
+# ╟─4eda374d-772c-41da-b02b-0f07921fd64c
+# ╟─0f907a4b-5a78-4666-8fb1-222828ffdf84
+# ╠═82b9b6a0-ba28-4dab-a9fc-7ba57c6ce27b
+# ╠═2c6cc92a-4b1d-49ed-9f48-f352adc52b50
+# ╟─e5eaf808-8eed-4e97-837b-8c57d3f11edd
+# ╠═64ad2f95-06c3-4a57-b0aa-f662715f8c19
+# ╠═350a8e6f-57a0-408e-9d3f-2ac674d38135
+# ╟─c87aa335-11d0-4dce-970e-d536435f7a31
+# ╠═2c355bb2-ebfc-42a1-bb3b-e01a6666abef
+# ╟─a840d3cb-c1a9-42a9-8367-c6824fc00b1b
+# ╠═b9ee5918-06cb-41bd-9d7f-7f40e245dab2
+# ╠═1427ff0e-25f7-4436-8019-3d8f2dca7359
+# ╟─9938c3e5-20f7-455f-8113-b9e2f9e37eb7
