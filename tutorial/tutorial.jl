@@ -18,14 +18,11 @@ TableOfContents()
 # ╔═╡ b110d3e4-fc4a-48c0-a8e9-50f0dba3837c
 md"
 # a coding tutorial for Bayesian statistical inversion (BSI)
-_author_: Cory Simon
-
-_email_: $\texttt{cory.simon}$ [at] $\texttt{oregonstate.edu}$
+_contact email for feedback or questions_: $\texttt{cory.simon}$ [at] $\texttt{oregonstate.edu}$
 
 !!! note
 	this is a minimal/simplified coding tutorial for Bayesian statistical inversion (BSI), following the problem setup in and using the data from our paper:
 	> F. Waqar, S. Patel, C. Simon. \"A tutorial on the Bayesian statistical approach to inverse problems\" _APL Machine Learning_. (2023) [link](https://arxiv.org/abs/2304.07610)
-	see our paper for more details.
 
 	this coding tutorial is in the [Julia programming language](https://julialang.org/), within a [Pluto notebook](https://plutojl.org/). we largely rely on the probabalistic programming library, [`Turing.jl`](https://turinglang.org/dev/docs/using-turing/), whose docs contain another relevant tutorial [\"Bayesian Estimation of Differential Equations\"](https://turinglang.org/dev/tutorials/10-bayesian-differential-equations/).
 
