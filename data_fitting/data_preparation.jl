@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.20
+# v0.19.27
 
 using Markdown
 using InteractiveUtils
@@ -169,6 +169,15 @@ rename!(downsampled_data, "T [°C]" => "θ [°C]")
 # ╔═╡ 322c60c0-1e04-4bd8-a3f9-2802e8deb605
 jldsave("data_run_$run.jld2"; data=downsampled_data[1:end-1, :], θᵃⁱʳ=data[end, "T [°C]"])
 
+# ╔═╡ 15905572-a13c-48d3-9e2f-f2bde6783dcc
+md"for the tutorial..."
+
+# ╔═╡ f0a3c3fa-01a7-4a59-9c97-25ebb1dcc44c
+CSV.write("../tutorial/lime_temp_param_id.csv", load("data_run_12.jld2")["data"])
+
+# ╔═╡ 9b325cec-cb8c-4274-ab73-802d87d2c372
+load("data_run_12.jld2")
+
 # ╔═╡ Cell order:
 # ╠═38925e1a-817b-4575-9768-02fb68bec2d6
 # ╠═bc2cd3cb-c982-4f4e-a74c-5119a6851b04
@@ -199,3 +208,6 @@ jldsave("data_run_$run.jld2"; data=downsampled_data[1:end-1, :], θᵃⁱʳ=data
 # ╠═ed732170-4f38-4dec-ae73-d45822c7e490
 # ╠═221e0b99-e2ac-47f9-90ff-ab7263d2e178
 # ╠═322c60c0-1e04-4bd8-a3f9-2802e8deb605
+# ╟─15905572-a13c-48d3-9e2f-f2bde6783dcc
+# ╠═f0a3c3fa-01a7-4a59-9c97-25ebb1dcc44c
+# ╠═9b325cec-cb8c-4274-ab73-802d87d2c372
