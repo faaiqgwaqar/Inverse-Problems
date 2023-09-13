@@ -131,7 +131,7 @@ function viz_changing_T₀()
 	ylims!(-0.05, 1.05)
 	xlims!(-0.1, 5.0)
 	# inset w lime
-	save("range_of_initial_conditions.pdf", fig)
+	save(joinpath("figs", "range_of_initial_conditions.pdf"), fig)
 	return fig
 end
 
@@ -188,7 +188,7 @@ function viz_convergence(chain::Chains, var::String)
 	axs[1].ylabel = labels[var]
 	axs[2].xlabel = labels[var]
 	axislegend(axs[2])
-	save("convergence_study_$var.pdf", fig)
+	save(joinpath("figs", "convergence_study_$var.pdf"), fig)
 	fig
 end
 
@@ -397,7 +397,7 @@ function viz_residuals_box(chain_λ)
 	boxplot!(vcat([data[:, "t [hr]"] for i = 1:n_models]...), 
 		vcat(eachcol(rs)...), color="green", width=0.2, show_outliers=false)
 	
-	save("residuals_box.pdf", fig)
+	save(joinpath("figs", "residuals_box.pdf"), fig)
 	fig
 end
 
@@ -672,7 +672,7 @@ function ridge_plot()
 	end
 	Label(fig[:, 0], "posterior density", rotation=pi/2, font=AoG.firasans("Light"))
 	Colorbar(fig[:, 2], colormap=cmap, limits=crange, label="measurement time, t′ [hr]")
-	save("figs/ridge_plot.pdf", fig)
+	save(joinpath("figs", "ridge_plot.pdf"), fig)
 	fig
 end
 
@@ -712,7 +712,7 @@ end
 model_θ₀_t₀ = likelihood_for_θ₀_t₀(data_tr, i_obs)
 
 # ╔═╡ 14bee7d1-dadc-41be-9ea0-1420cd68a121
-chain_θ₀_t₀ = sample(model_θ₀_t₀, NUTS(), MCMCSerial(), 5000, 5; progress=true)
+chain_θ₀_t₀ = sample(model_θ₀_t₀, NUTS(), MCMCSerial(), 20000, 3; progress=true)
 
 # ╔═╡ 8b176631-b5a7-4c2b-afc7-9dacd0d22d0c
 viz_trajectories(data_tr, chain_θ₀_t₀, i_obs, incl_t₀=false, savename="tr2_trajectories")
@@ -837,6 +837,28 @@ viz_θ₀_t₀_distn(θ₀_prior, t₀_prior, chain_θ₀_t₀)
 # ╔═╡ 660ed613-6523-4077-8aec-79998c4eaa44
 i_obs
 
+# ╔═╡ e6d60fe5-2560-45b9-b447-882d4c507fb9
+function sensitivity_of_classical_soln_curve()
+	t₀s = range(-3, 3, length=100)
+	t′ = data_tr[i_obs, "t [hr]"]
+	θ′ = data_tr[i_obs, "θ [°C]"]
+	λ̄ = λ_posterior.μ
+
+	ϵs = range(-4, 4, length=10)
+	
+	fig = Figure()
+	ax = Axis(fig[1, 1])
+	for ϵ in ϵs
+		lines!(ax,
+			t₀s,
+			[θᵃⁱʳ_obs_tr + (θ′+ϵ - θᵃⁱʳ_obs_tr) * exp((t′ - t₀) / λ̄) for t₀ in t₀s], color=the_colors["model"], linestyle=:dash, linewidth=1)
+	end
+	fig
+end
+
+# ╔═╡ 6ba2d280-76f9-4439-9dd1-c3dd6db11fb5
+sensitivity_of_classical_soln_curve()
+
 # ╔═╡ Cell order:
 # ╟─b1c06c4d-9b4d-4af3-9e9b-3ba993ca83a0
 # ╠═43bcf4b0-fbfc-11ec-0e23-bb05c02078c9
@@ -925,3 +947,5 @@ i_obs
 # ╠═f8092ba3-54c7-4e2d-a885-f5ef6c6e094e
 # ╠═0b0af726-3eb7-4939-bdd5-7b76213d5485
 # ╠═660ed613-6523-4077-8aec-79998c4eaa44
+# ╠═e6d60fe5-2560-45b9-b447-882d4c507fb9
+# ╠═6ba2d280-76f9-4439-9dd1-c3dd6db11fb5
