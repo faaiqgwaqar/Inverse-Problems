@@ -382,15 +382,17 @@ function viz_residuals_box(chain_λ)
 	fig = Figure()
 	ax  = Axis(fig[1, 1], 
 		xlabel="time [hr]", 
-		ylabel=rich("residual, θ", subscript("i,obs"), "- θ(t", subscript("i"), ") [°C]")
+		ylabel=rich("residual, θ", subscript("i,obs"), "- Θ", subscript("obs"), "(t", subscript("i"), ") [°C]")
 	)
 	# loop over model.
 	for i = 1:n_models
 		# sample this model.
 		row = DataFrame(chain_λ)[i, :]
-		λ, θ₀, θᵃⁱʳ = row["λ"], row["θ₀"], row["θᵃⁱʳ"]
+		λ, θ₀, θᵃⁱʳ, σ = row["λ"], row["θ₀"], row["θᵃⁱʳ"], row["σ"]
+		ϵs = [randn() * σ for _ = 1:nrow(data)]
+		θ_synthetic = θ_model.(data[:, "t [hr]"], λ, 0.0, θ₀, θᵃⁱʳ) .+ ϵs
 		# compute residuals
-		rs[:, i] = data[:, "θ [°C]"] .- θ_model.(data[:, "t [hr]"], λ, 0.0, θ₀, θᵃⁱʳ)
+		rs[:, i] = data[:, "θ [°C]"] .- θ_synthetic
 	end
 	hlines!(0.0, color="gray", linestyle=:dash)
 	# return resids
@@ -551,6 +553,35 @@ end
 
 # ╔═╡ 98b7aad3-5bf4-412a-9106-ce1b729e887d
 check_prior()
+
+# ╔═╡ a8fb1903-4e4c-4356-87f2-71af7936316c
+function check_prior_data()
+	fig = Figure()
+	ax  = Axis(fig[1, 1], xlabel="time [hr]", ylabel="lime temperature [°C]")
+	
+	ts = data[:, "t [hr]"]
+	θs = similar(data[:, "t [hr]"])
+
+	colors = distinguishable_colors(20)
+	for i = 1:20
+		λ = rand(λ_prior)
+		σ = rand(σ_prior)
+		θ₀ = rand(Normal(data[1, "θ [°C]"], σ))
+		θᵃⁱʳ = rand(Normal(θᵃⁱʳ_obs, σ))
+		for k = 1:length(ts)
+			θs[k] = θ_model.(ts[k], λ, 0.0, θ₀, θᵃⁱʳ) + randn() * σ
+		end
+		scatter!(ts, θs, marker=:o, markersize=5, color=colors[i])
+	end
+	_viz_data!(ax, data, θᵃⁱʳ_obs)
+	ylims!(5, 22)
+	axislegend(position=:rb)
+	save(joinpath("figs", "prior_checking_data.pdf"), fig)
+	fig
+end
+
+# ╔═╡ a9fb1d27-23fe-4b27-91d2-690d415718fb
+check_prior_data()
 
 # ╔═╡ b00bc0b4-c33e-4f5e-98f9-68085bd3d94d
 function viz_data(data::DataFrame, i_obs::Int; savename=nothing, incl_t₀=true)
@@ -937,7 +968,9 @@ sensitivity_of_classical_soln_curve()
 # ╠═9858f954-9e2e-4ac1-8587-ac2e3ff8be94
 # ╟─98429bad-3e07-4521-a512-8126670d2817
 # ╠═f41a70c5-50d5-4460-8e8f-6c3f6beeb6a2
+# ╠═a8fb1903-4e4c-4356-87f2-71af7936316c
 # ╠═98b7aad3-5bf4-412a-9106-ce1b729e887d
+# ╠═a9fb1d27-23fe-4b27-91d2-690d415718fb
 # ╟─d8e026b9-8943-437e-a08b-2395de35d705
 # ╠═30bd4bca-4af6-4e1a-8131-75ca18df7a59
 # ╠═7f5c6af9-8510-4eff-8cf0-f769e0d2a005
