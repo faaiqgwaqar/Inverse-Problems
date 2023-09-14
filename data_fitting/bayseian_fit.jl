@@ -404,6 +404,9 @@ end
 # ╔═╡ 9858f954-9e2e-4ac1-8587-ac2e3ff8be94
 viz_residuals_box(chain_λ)
 
+# ╔═╡ 98429bad-3e07-4521-a512-8126670d2817
+md"### prior check"
+
 # ╔═╡ d8e026b9-8943-437e-a08b-2395de35d705
 md"## time reversal problem
 
@@ -524,6 +527,30 @@ function viz_trajectories(
 
 	fig
 end
+
+# ╔═╡ f41a70c5-50d5-4460-8e8f-6c3f6beeb6a2
+function check_prior()
+	fig = Figure()
+	ax  = Axis(fig[1, 1], xlabel="time [hr]", ylabel="lime temperature [°C]")
+	
+	ts = range(-1.0, 13.0, length=500)
+
+	for i = 1:100
+		λ = rand(λ_prior)
+		σ = rand(σ_prior)
+		θ₀ = rand(Normal(data[1, "θ [°C]"], σ))
+		θᵃⁱʳ = rand(Normal(θᵃⁱʳ_obs, σ))
+		lines!(ts, θ_model.(ts, λ, 0.0, θ₀, θᵃⁱʳ),
+			   color=(the_colors["model"], 0.1), label=i == 1 ? "prior model" : nothing)
+	end
+	_viz_data!(ax, data, θᵃⁱʳ_obs)
+	axislegend(position=:rb)
+	save(joinpath("figs", "prior_checking.pdf"), fig)
+	fig
+end
+
+# ╔═╡ 98b7aad3-5bf4-412a-9106-ce1b729e887d
+check_prior()
 
 # ╔═╡ b00bc0b4-c33e-4f5e-98f9-68085bd3d94d
 function viz_data(data::DataFrame, i_obs::Int; savename=nothing, incl_t₀=true)
@@ -908,6 +935,9 @@ sensitivity_of_classical_soln_curve()
 # ╟─08f81d83-4d56-473a-a6ad-a1fffff773a5
 # ╠═9ab23808-0bb4-4956-a930-3762321ee679
 # ╠═9858f954-9e2e-4ac1-8587-ac2e3ff8be94
+# ╟─98429bad-3e07-4521-a512-8126670d2817
+# ╠═f41a70c5-50d5-4460-8e8f-6c3f6beeb6a2
+# ╠═98b7aad3-5bf4-412a-9106-ce1b729e887d
 # ╟─d8e026b9-8943-437e-a08b-2395de35d705
 # ╠═30bd4bca-4af6-4e1a-8131-75ca18df7a59
 # ╠═7f5c6af9-8510-4eff-8cf0-f769e0d2a005
