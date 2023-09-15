@@ -155,8 +155,8 @@ function analyze_posterior(chain::Chains, param::Union{String, Symbol})
 end
 
 # ╔═╡ 788f5c20-7ebb-43e7-bd07-46aa6c9fd249
-function get_kde_ρ(x::Vector{Float64}; support::Tuple{Float64, Float64}=(-Inf, Inf)) # returns a function
-	bw = 1.06 * std(x) * (length(x)) ^ (-1/5)
+function get_kde_ρ(x::Vector{Float64}; support::Tuple{Float64, Float64}=(-Inf, Inf), scalar=1.06) # returns a function
+	bw = scalar * std(x) * (length(x)) ^ (-1/5)
 	
 	kde = KernelDensity(bandwidth=bw)
 	kde.fit(reshape(x, length(x), 1))
@@ -398,7 +398,7 @@ function viz_residuals_box(chain_λ)
 	# return resids
 	boxplot!(vcat([data[:, "t [hr]"] for i = 1:n_models]...), 
 		vcat(eachcol(rs)...), color="green", width=0.2, show_outliers=false)
-	
+	@show maximum(abs.(mean(rs, dims=2)))
 	save(joinpath("figs", "residuals_box.pdf"), fig)
 	fig
 end
@@ -770,7 +770,7 @@ end
 model_θ₀_t₀ = likelihood_for_θ₀_t₀(data_tr, i_obs)
 
 # ╔═╡ 14bee7d1-dadc-41be-9ea0-1420cd68a121
-chain_θ₀_t₀ = sample(model_θ₀_t₀, NUTS(), MCMCSerial(), 20000, 3; progress=true)
+chain_θ₀_t₀ = sample(model_θ₀_t₀, NUTS(), MCMCSerial(), 10000, 3; progress=true)
 
 # ╔═╡ 8b176631-b5a7-4c2b-afc7-9dacd0d22d0c
 viz_trajectories(data_tr, chain_θ₀_t₀, i_obs, incl_t₀=false, savename="tr2_trajectories")
@@ -840,8 +840,8 @@ function viz_θ₀_t₀_distn(θ₀_prior::Distribution,
 	# make more dense.
 	θ₀s = vcat(θ₀s, [θ₀_prior.a] .+ [-0.0001, 0.0001], [θ₀_prior.b] .+ [-0.0001, 0.0001])
 	sort!(θ₀s)
-    ρ_posterior_θ₀ = get_kde_ρ(θ̂₀.samples, support=(θ₀_prior.a, θ₀_prior.b))
-	ρ_posterior_t₀ = get_kde_ρ(t̂₀.samples)
+    ρ_posterior_θ₀ = get_kde_ρ(θ̂₀.samples, support=(θ₀_prior.a, θ₀_prior.b), scalar=2.4)
+	ρ_posterior_t₀ = get_kde_ρ(t̂₀.samples, scalar=2.4)
 	lpost = lines!(ax_t, t₀s, ρ_posterior_t₀.(t₀s), 
 		color=the_colors["posterior"], linewidth=2)
 	lines!(ax_r, ρ_posterior_θ₀.(θ₀s), θ₀s,
@@ -853,7 +853,6 @@ function viz_θ₀_t₀_distn(θ₀_prior::Distribution,
 	ci_θ₀ = analyze_posterior(chain_θ₀_t₀, :θ₀)
 	lines!(ax_r, zeros(2), [ci_θ₀.lb, ci_θ₀.ub], color="black", 
 		linewidth=4)
-		
 
 	lprio =  lines!(ax_t, t₀s, [pdf(t₀_prior, t₀) for t₀ in t₀s], 
 		color=the_colors["prior"], linewidth=2)
@@ -905,7 +904,7 @@ function sensitivity_of_classical_soln_curve()
 	ϵs = range(-4, 4, length=10)
 	
 	fig = Figure()
-	ax = Axis(fig[1, 1])
+	ax = Axis(fig[1, 1], xlabel="t₀", ylabel="θ₀", title="classical solutions")
 	for ϵ in ϵs
 		lines!(ax,
 			t₀s,
@@ -916,6 +915,72 @@ end
 
 # ╔═╡ 6ba2d280-76f9-4439-9dd1-c3dd6db11fb5
 sensitivity_of_classical_soln_curve()
+
+# ╔═╡ 7752031a-7bec-4b21-93d9-de755665310f
+md"# toy example"
+
+# ╔═╡ 15c99193-bf1d-4d0f-b314-f357687edbcd
+function toy(n::Int, σₚᵣ::Float64, savename::String; show_likelihood::Bool=true)
+	# pH's for plot
+	xs = range(2.5, 4.5, length=300) # pHs
+	
+	# prior
+	xₚᵣ = 3.5
+	_π_pr = Normal(xₚᵣ, σₚᵣ)
+	π_pr = [pdf(_π_pr, x) for x in xs]
+	
+	# instrument
+	σ = 0.1
+
+	# data
+	x_data = vcat([3.1], [3.1 + randn() * σ for i = 1:n-1])
+	
+	# likelihood
+	π_like = zeros(length(xs))
+	for i = 1:length(xs)
+		π_like[i] = prod(pdf(Normal(xs[i], σ), x_data[d]) for d=1:n)
+	end
+
+	# post
+	σₚₒ = sqrt(1 / (1 / σₚᵣ ^ 2 + n / σ ^2))
+	w = (n / σ^2) / (n / σ^2 + 1 / σₚᵣ ^ 2)
+	@show w
+	xₚₒ = w * mean(x_data[1:n]) + (1 - w) * xₚᵣ
+	_π_post = Normal(xₚₒ, σₚₒ)
+	π_post = [pdf(_π_post, x) for x in xs]
+	
+	fig = Figure()
+	ax = Axis(fig[1, 1], xlabel="pH", ylabel="density", title="n=$n")
+	hlines!(0, color="black", linewidth=1)
+	lines!(xs, π_pr, 
+		label="prior", color=the_colors["prior"])
+	if show_likelihood
+		lines!(xs, π_like, label="likelihood", color=the_colors["model"])
+	end
+	if show_likelihood
+		ylims!(nothing, 5)
+	end
+	lines!(xs, π_post, 
+		label="posterior", color=the_colors["posterior"])
+	scatter!(x_data[1:n], zeros(n), color=the_colors["data"], label="data", marker=:vline, markersize=20)
+	xlims!(minimum(xs), maximum(xs))
+	# ylims!(0, maximum(π_post))
+	axislegend()
+	save(joinpath("figs", savename), fig)
+	fig
+end
+
+# ╔═╡ a83bd1d2-a455-4faa-a29b-109b4c717c2f
+toy(1, 0.15, "wine_thin_prior.pdf")
+
+# ╔═╡ 9e626ca2-63b2-4683-b1cc-0aac5eeb0b42
+toy(1, 0.4, "wine_thick_prior.pdf")
+
+# ╔═╡ b0cdf18a-5e23-4e24-9e53-32af9b0e3198
+toy(6, 0.15, show_likelihood=false, "wine_lots_of_data.pdf")
+
+# ╔═╡ 92771978-d01a-4148-9bb4-e4ae4bfc415b
+toy(150, 0.15, show_likelihood=false, "wine_LOTS_of_data.pdf")
 
 # ╔═╡ Cell order:
 # ╟─b1c06c4d-9b4d-4af3-9e9b-3ba993ca83a0
@@ -1012,3 +1077,9 @@ sensitivity_of_classical_soln_curve()
 # ╠═660ed613-6523-4077-8aec-79998c4eaa44
 # ╠═e6d60fe5-2560-45b9-b447-882d4c507fb9
 # ╠═6ba2d280-76f9-4439-9dd1-c3dd6db11fb5
+# ╟─7752031a-7bec-4b21-93d9-de755665310f
+# ╠═15c99193-bf1d-4d0f-b314-f357687edbcd
+# ╠═a83bd1d2-a455-4faa-a29b-109b4c717c2f
+# ╠═9e626ca2-63b2-4683-b1cc-0aac5eeb0b42
+# ╠═b0cdf18a-5e23-4e24-9e53-32af9b0e3198
+# ╠═92771978-d01a-4148-9bb4-e4ae4bfc415b
