@@ -94,7 +94,7 @@ function viz_model_only()
 	hidedecorations!(ax_inset)
 	hidespines!(ax_inset)
 	
-	save(joinpath("figs", "model_soln.pdf"), fig)
+	save(joinpath("figs", "fig6.pdf"), fig)
 	return fig
 end
 
@@ -332,7 +332,7 @@ function viz_posterior_prior(chain::Chains, prior::Distribution,
 end
 
 # ╔═╡ 294e240f-c146-4ef3-b172-26e70ad3ed19
-viz_posterior_prior(chain_λ, λ_prior, "λ", savename="param_id_prior_posterior")
+viz_posterior_prior(chain_λ, λ_prior, "λ", savename="fig7b")
 
 # ╔═╡ 887d5dbc-1103-4530-8010-2e265a4b5d25
 DataFrame(chain_λ)[:, :θᵃⁱʳ]
@@ -599,10 +599,10 @@ function viz_data(data::DataFrame, i_obs::Int; savename=nothing, incl_t₀=true)
 end
 
 # ╔═╡ a4192388-5fca-4d61-9cc0-27029032b765
-viz_data(data, θᵃⁱʳ_obs, savename="param_id_data")
+viz_data(data, θᵃⁱʳ_obs, savename="fig7a")
 
 # ╔═╡ 8e7ae1d5-fade-4b90-8dd7-e61e965f3609
-viz_data(data_tr, i_obs, savename="tr_data")
+viz_data(data_tr, i_obs, savename="fig8a")
 
 # ╔═╡ e53ddd3b-5dc0-4621-9af3-930c52c51af8
 data_tr[1, :]
@@ -623,7 +623,7 @@ nrow(DataFrame(chain_θ₀))
 viz_convergence(chain_θ₀, "θ₀")
 
 # ╔═╡ db79cc93-0459-42b2-a800-6a1bc7eec1db
-viz_posterior_prior(chain_θ₀, θ₀_prior, "θ₀", savename="tr_prior_posterior", 
+viz_posterior_prior(chain_θ₀, θ₀_prior, "θ₀", savename="fig8b", 
 	true_var=data_tr[1, "θ [°C]"])
 
 # ╔═╡ 9a4f8bc7-bbc7-42d2-acf2-992d740f9d8b
@@ -667,7 +667,7 @@ end
 viz_trajectories(data, θᵃⁱʳ_obs, chain_λ; savename="param_id_trajectories")
 
 # ╔═╡ 5cd464bb-710a-4e57-a51a-2ebad433e874
-viz_trajectories(data_tr, chain_θ₀, i_obs, savename="tr_trajectories")
+viz_trajectories(data_tr, chain_θ₀, i_obs, savename="fig8c")
 
 # ╔═╡ 44357419-04ad-4f20-8830-35f33eef9171
 data_tr
@@ -730,7 +730,7 @@ function ridge_plot()
 	end
 	Label(fig[:, 0], "posterior density", rotation=pi/2, font=AoG.firasans("Light"))
 	Colorbar(fig[:, 2], colormap=cmap, limits=crange, label="measurement time, t′ [hr]")
-	save(joinpath("figs", "ridge_plot.pdf"), fig)
+	save(joinpath("figs", "fig9.pdf"), fig)
 	fig
 end
 
@@ -741,7 +741,7 @@ ridge_plot()
 md"### underdetermined"
 
 # ╔═╡ 364f2880-6a27-49a0-b5d4-1c6fd6f43293
-viz_data(data_tr, i_obs, incl_t₀=false, savename="tr2_data")
+viz_data(data_tr, i_obs, incl_t₀=false, savename="fig10a")
 
 # ╔═╡ 4d931a20-2ab7-43c7-91ed-8f4fd40648a5
 t₀_prior = truncated(Normal(-0.1, 0.25), -1.0, 1.0)
@@ -773,7 +773,7 @@ model_θ₀_t₀ = likelihood_for_θ₀_t₀(data_tr, i_obs)
 chain_θ₀_t₀ = sample(model_θ₀_t₀, NUTS(), MCMCSerial(), 10000, 3; progress=true)
 
 # ╔═╡ 8b176631-b5a7-4c2b-afc7-9dacd0d22d0c
-viz_trajectories(data_tr, chain_θ₀_t₀, i_obs, incl_t₀=false, savename="tr2_trajectories")
+viz_trajectories(data_tr, chain_θ₀_t₀, i_obs, incl_t₀=false, savename="fig10c")
 
 # ╔═╡ 7824672b-e69d-435d-a8ab-d62f014374d3
 function get_ρ_posterior_t₀_θ₀(chain_θ₀_t₀::Chains)
@@ -883,7 +883,7 @@ function viz_θ₀_t₀_distn(θ₀_prior::Distribution,
 	resize_to_layout!(fig)
 	Legend(fig[1, 2], [lprio, lpost, s], ["prior", "posterior", rich("(t", subscript("0"), ", θ", subscript("0, obs"), ")")], labelsize=16)
 
-	save(joinpath("figs", "tr2_prior_posterior.pdf"), fig)
+	save(joinpath("figs", "fig10c.pdf"), fig)
 	fig
 	# ρs
 end
@@ -971,16 +971,13 @@ function toy(n::Int, σₚᵣ::Float64, savename::String; show_likelihood::Bool=
 end
 
 # ╔═╡ a83bd1d2-a455-4faa-a29b-109b4c717c2f
-toy(1, 0.15, "wine_thin_prior.pdf")
+toy(1, 0.15, "fig4b.pdf")
 
 # ╔═╡ 9e626ca2-63b2-4683-b1cc-0aac5eeb0b42
-toy(1, 0.4, "wine_thick_prior.pdf")
+toy(1, 0.4, "fig4a.pdf")
 
 # ╔═╡ b0cdf18a-5e23-4e24-9e53-32af9b0e3198
-toy(6, 0.15, show_likelihood=false, "wine_lots_of_data.pdf")
-
-# ╔═╡ 92771978-d01a-4148-9bb4-e4ae4bfc415b
-toy(150, 0.15, show_likelihood=false, "wine_LOTS_of_data.pdf")
+toy(6, 0.15, show_likelihood=false, "fig4c.pdf")
 
 # ╔═╡ Cell order:
 # ╟─b1c06c4d-9b4d-4af3-9e9b-3ba993ca83a0
@@ -1082,4 +1079,3 @@ toy(150, 0.15, show_likelihood=false, "wine_LOTS_of_data.pdf")
 # ╠═a83bd1d2-a455-4faa-a29b-109b4c717c2f
 # ╠═9e626ca2-63b2-4683-b1cc-0aac5eeb0b42
 # ╠═b0cdf18a-5e23-4e24-9e53-32af9b0e3198
-# ╠═92771978-d01a-4148-9bb4-e4ae4bfc415b
