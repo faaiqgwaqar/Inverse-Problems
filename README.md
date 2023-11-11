@@ -1,7 +1,7 @@
 ### A tutorial on the Bayesian statistical approach to inverse problems
 
 C and Julia code to reproduce the results of our paper:
-> F. Waqar, S. Patel, C. Simon. "A tutorial on the Bayesian statistical approach to inverse problems." (2023) _arXiv_. [link](https://arxiv.org/abs/2304.07610)
+> F. Waqar, S. Patel, C. Simon. "A tutorial on the Bayesian statistical approach to inverse problems." (2023) _APL Machine Learning_. [link](https://pubs.aip.org/aip/aml/article/1/4/041101/2919936/A-tutorial-on-the-Bayesian-statistical-approach-to)
 
 :tangerine: the raw data collected using the microcontroller setup can be found in the directory `Arduino Results/`
 
